@@ -1,0 +1,17 @@
+# Matadorks Git Ignore Rules
+
+# Private AI Intelligence & Coordination
+ostava/
+
+# Python environment
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data & Results
+data/*
+!data/.gitkeep
+
+# System files
+.DS_Store
+.env

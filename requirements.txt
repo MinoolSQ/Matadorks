@@ -1,0 +1,6 @@
+requests
+beautifulsoup4
+rich
+duckduckgo_search
+PySocks
+urllib3
