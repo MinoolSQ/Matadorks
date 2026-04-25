@@ -6,6 +6,9 @@ from core.git_handler import GitHandler
 from rich.panel import Panel
 from rich.console import Console
 
+import subprocess
+import argparse
+
 console = Console()
 
 class MatadorksApp:
@@ -14,6 +17,16 @@ class MatadorksApp:
         self.logger = Logger()
         self.git = GitHandler()
         self.version = "1.0.0"
+
+    def sync_dependencies(self):
+        self.logger.status("Synchronizing dependencies with uv...")
+        try:
+            subprocess.run(["uv", "sync"], check=True)
+            self.logger.success("Dependencies synchronized successfully.")
+        except FileNotFoundError:
+            self.logger.error("uv not found. Please install uv (https://github.com/astral-sh/uv).")
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"uv sync failed: {e}")
 
     def show_banner(self):
         banner = f"""
@@ -108,5 +121,13 @@ class MatadorksApp:
         self.logger.success("Exploitation phase completed.")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Matadorks Unified SQLi Pipeline")
+    parser.add_argument("--sync", action="store_true", help="Sync dependencies using uv")
+    args = parser.parse_args()
+
     app = MatadorksApp()
-    app.run_pipeline()
+    
+    if args.sync:
+        app.sync_dependencies()
+    else:
+        app.run_pipeline()

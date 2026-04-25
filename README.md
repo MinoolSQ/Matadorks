@@ -1,0 +1,81 @@
+# MATADORKS
+
+```text
+                                 _______
+                    反射          /      /|
+          ________  __         /      / |
+         /        \/  \       /      /  |
+        /  ______  \   \     /      /   |
+       /  /      \  \   \   /      /    |
+      /  /        \  \   \ /      /     |
+     /  /          \  \   \      /      |
+    /  /            \  \   \    /       |
+   /__/              \__\   \  /        |
+                          \  \/         |
+    _______________________|  |_________|_______________________
+   |                                                           |
+   |    __  __        _             _             _            |
+   |   |  \/  |  __ _ | |_  __ _  __| | ___  _ __ | | __ ___   |
+   |   | |\/| | / _` || __|/ _` |/ _` |/ _ \| '__|| |/ // __|  |
+   |   | |  | || (_| || |_| (_| | (_| | (_) | |   |   < \__ \  |
+   |   |_|  |_| \__,_| \__|\__,_|\__,_|\___/|_|   |_|\_\|___/  |
+   |                                                           |
+   |___________________________________________________________|
+                THE UNIFIED AUTONOMOUS SQLI ARENA
+```
+
+> **"In the arena of cyberspace, the Matador doesn't just find vulnerabilities—he dances with them."**
+
+**Matadorks** is a high-performance, fully autonomous SQLi (SQL Injection) discovery and exploitation pipeline. It unifies proxy management, multi-engine dorking, target validation, and automated exploitation into a single, lethal terminal interface.
+
+---
+
+## ⚡ Core Features
+
+*   🛡️ **Adaptive Proxy Engine**: Dual-phase validation (Async TCP + HTTP) with source quality ranking and auto-healing capabilities.
+*   🔍 **Multi-Engine Search**: Parallel scraping across Google, Bing, Brave, Yandex, and DuckDuckGo with advanced stealth mechanics.
+*   🎭 **Dynamic Dorking**: Targeted SQLi dork generation focusing on regional parameters and high-value niches.
+*   🧹 **Smart Validator**: Aggressive noise reduction that filters out dead links and non-exploitable static pages.
+*   🛠️ **SQLMap Automator**: Fully integrated SQLMap management for seamless vulnerability detection.
+*   💰 **Auto-Looter**: Precise extraction of DBMS information, users, and database schemas with ANSI-stripped reporting.
+*   🧠 **AI-Friendly**: Built-in `ostava/` architecture designed for collaborative intelligence between Gemini and Claude.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Synchronize Dependencies
+Matadorks uses `uv` for ultra-fast dependency management.
+```bash
+python3 matadorks.py --sync
+```
+
+### 2. Enter the Arena
+Run the full pipeline autonomously:
+```bash
+python3 matadorks.py
+```
+
+---
+
+## 🏗️ Project Structure
+
+*   `matadorks.py`: The master controller and CLI interface.
+*   `core/`: The heart of the system (Proxy, Search, State, Logger).
+*   `modules/`: Specialized units for Dorking, Scanning, Validating, and Exploiting.
+*   `data/`: Where the loot and targets are stored.
+*   `ostava/`: Private intelligence and historical context (Git Ignored).
+
+---
+
+## ⚖️ Legal Disclaimer
+
+**FOR EDUCATIONAL AND ETHICAL SECURITY TESTING PURPOSES ONLY.**
+Usage of Matadorks for attacking targets without prior mutual consent is illegal. It is the end user's responsibility to obey all applicable local, state, and federal laws. The developer assumes no liability and is not responsible for any misuse or damage caused by this program.
+
+---
+
+<p align="center">
+  <i>Developed with precision. Used with caution.</i><br>
+  <b>Matadorks v1.0.0</b>
+</p>

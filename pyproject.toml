@@ -1,0 +1,18 @@
+[project]
+name = "matadorks"
+version = "1.0.0"
+description = "Unified Autonomous SQLi Pipeline"
+readme = "ostava/arhiva/README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "rich>=13.7.0",
+    "duckduckgo-search>=5.3.0",
+    "pysocks>=1.7.1",
+    "urllib3>=2.2.0",
+]
+
+[tool.uv]
+managed = true
+dev-dependencies = []
