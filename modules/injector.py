@@ -4,32 +4,27 @@ import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
+from core.config import (
+    VALIDATED_FILE, VULNERABLE_FILE,
+    SQLMAP_LEVEL, SQLMAP_RISK, SQLMAP_SCAN_TIMEOUT,
+    SQLMAP_CONCURRENT_SCANS, SQLMAP_DBMS
+)
 
-# --- CONFIGURATION ---
-INPUT_FILE = "validated_targets.txt"  # Očišćeni linkovi od validatora
-OUTPUT_FILE = "vulnerable_targets.txt"
-CONCURRENT_SCANS = 5  # Koliko SQLMap instanci paralelno
-SQLMAP_LEVEL = 2      # Level 1-5
-SQLMAP_RISK = 1       # Risk 1-3
-TIMEOUT = 300         # Maksimalno vreme po jednom sajtu (5 minuta)
-
-# SQLMap komanda i osnovni argumenti
-# --batch: non-interactive
-# --random-agent: koristi razlicite User-Agente
-# --forms: testira i forme ako ih nadje
-# --crawl=2: ako hoces da dublje skenira (opciono)
-BASE_ARGS = [
-    "sqlmap", "-u", "{url}",
-    "--batch",
-    "--random-agent",
-    f"--level={SQLMAP_LEVEL}",
-    f"--risk={SQLMAP_RISK}",
-    "--timeout=10",
-    "--threads=3",
-    "--dbms=mysql",  # Mozes skloniti ako hoces da detektuje sve baze
-    "--technique=BEUSTQ",
-    "--fresh-queries",
-]
+def _build_sqlmap_args(url):
+    args = [
+        "sqlmap", "-u", url,
+        "--batch",
+        "--random-agent",
+        f"--level={SQLMAP_LEVEL}",
+        f"--risk={SQLMAP_RISK}",
+        "--timeout=10",
+        "--threads=3",
+        "--technique=BEUSTQ",
+        "--fresh-queries",
+    ]
+    if SQLMAP_DBMS:
+        args.append(f"--dbms={SQLMAP_DBMS}")
+    return args
 
 class SQLMapManager:
     def __init__(self, input_file, output_file, max_scans):
@@ -50,7 +45,7 @@ class SQLMapManager:
         print(f"[*] Pokrećem SQLMap na: {url}")
         
         # Formatiranje komande
-        cmd = [arg.replace("{url}", url) for arg in BASE_ARGS]
+        cmd = _build_sqlmap_args(url)
         
         try:
             # Pokretanje procesa
@@ -65,7 +60,7 @@ class SQLMapManager:
             is_vulnerable = False
             try:
                 # Cekamo do timeout-a
-                stdout, stderr = process.communicate(timeout=TIMEOUT)
+                stdout, stderr = process.communicate(timeout=SQLMAP_SCAN_TIMEOUT)
                 
                 # Provera da li je sqlmap nasao ranjivost
                 # SQLMap obicno ispisuje "is vulnerable" ili "injectable"
@@ -119,12 +114,10 @@ class SQLMapManager:
         print(f"[#] Pronađeno ranjivih meta: {self.vulnerable_count}")
         print(f"[#] Rezultati sačuvani u: {self.output_file}")
 
-def main(input_file=None, output_file=None, max_scans=5):
-    if input_file is None:
-        input_file = "data/validated_targets.txt"
-    if output_file is None:
-        output_file = "data/vulnerable_targets.txt"
-    
+def main(input_file=None, output_file=None, max_scans=None):
+    input_file = input_file or VALIDATED_FILE
+    output_file = output_file or VULNERABLE_FILE
+    max_scans = max_scans or SQLMAP_CONCURRENT_SCANS
     manager = SQLMapManager(input_file, output_file, max_scans)
     manager.run()
 
