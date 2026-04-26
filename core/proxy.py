@@ -36,9 +36,7 @@ def get_dynamic_sources():
         ],
     }
 
-TEST_URLS = ["https://httpbin.org/ip", "https://google.com", "https://bing.com"]
-TCP_TIMEOUT = 1.5   # Agresivan timeout za port check
-HTTP_TIMEOUT = 6.0  # Timeout za full HTTP test
+from core.config import TCP_TIMEOUT, HTTP_TIMEOUT, TEST_URLS, PROXY_MAX_TEST, PROXY_WORKERS
 
 class ProxyPool:
     def __init__(self):
@@ -211,7 +209,7 @@ class ProxyPool:
 _pool = ProxyPool()
 def get_google_pool(auto_build=True):
     if auto_build and _pool.size() == 0:
-        _pool.build(max_test=10000, min_working=50)
+        _pool.build(max_test=PROXY_MAX_TEST, min_working=50)
     return _pool
 
 if __name__ == "__main__":
