@@ -12,7 +12,7 @@ from core.stats import PipelineStats
 from rich.panel import Panel
 from rich.live import Live
 from rich.table import Table
-from rich.layout import Layout
+from rich.console import Group
 
 import subprocess
 import argparse
@@ -124,22 +124,17 @@ class MatadorksApp:
         )
         
         footer = "[dim][Q] Quit  [S] Skip fazu  [P] Pauziraj[/dim]"
-        
-        main_panel = Panel(
-            Layout(table),
+
+        return Panel(
+            Group(table, Panel(stats_table, border_style="dim"), footer),
             title="[bold red]MATADORKS LIVE[/bold red]",
             border_style="red"
         )
-        
-        # We can use a more complex layout or just a group of elements
-        from rich.console import Group
-        group = Group(
-            table,
-            Panel(stats_table, border_style="dim"),
-            footer
-        )
-        
-        return Panel(group, title="[bold red]MATADORKS LIVE[/bold red]", border_style="red")
+
+    def _dashboard_refresher(self):
+        while not self._stop_refresh.is_set():
+            self._live.update(self.build_dashboard())
+            self._stop_refresh.wait(0.5)
 
     def run_pipeline(self):
         self.show_banner()
@@ -148,11 +143,15 @@ class MatadorksApp:
         if not self.no_tui:
             listener = KeyboardListener(self)
             listener.start()
-            
-            with Live(self.build_dashboard(), refresh_per_second=2, console=console) as live:
+
+            self._stop_refresh = threading.Event()
+            with Live(self.build_dashboard(), refresh_per_second=4, console=console) as live:
                 self._live = live
+                refresher = threading.Thread(target=self._dashboard_refresher, daemon=True)
+                refresher.start()
                 self._execute_phases()
-            
+                self._stop_refresh.set()
+
             listener.stop()
         else:
             self._execute_phases()
@@ -185,8 +184,6 @@ class MatadorksApp:
             return
 
         self.stats.update(phase=name)
-        if hasattr(self, '_live'):
-            self._live.update(self.build_dashboard())
 
         if self.state.get(f"phase_{name.lower()}") == "completed":
             self.logger.info(f"Phase {name} already completed. Skipping.")
