@@ -12,18 +12,31 @@ import time
 import random
 import threading
 import socket
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, urlunparse, parse_qs
 socket.setdefaulttimeout(10)
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from core.search import (duckduckgo, startpage, brave, yandex, bing, google)
+from core.search import (duckduckgo, startpage, brave, yandex, bing, google, publicwww)
 from core.proxy import get_google_pool
 from core.config import (
     DOMAIN_BLACKLIST, DORKS_FILE, SCANNER_THREADS, SCANNER_AMOUNT,
-    SCANNER_PREFIX, CONSECUTIVE_FAILURE_THRESHOLD, COOLDOWN_SLEEP
+    SCANNER_PREFIX, CONSECUTIVE_FAILURE_THRESHOLD, COOLDOWN_SLEEP,
+    USE_PUBLICWWW, USE_STARTPAGE
 )
 
 # --- CONFIG & BLACKLIST ---
+
+seen_urls = set()
+seen_lock = threading.Lock()
+
+def normalize_url(url):
+    try:
+        p = urlparse(url)
+        # Lowercase scheme and host, remove fragment, rstrip / from path
+        return urlunparse((p.scheme.lower(), p.netloc.lower(), 
+                          p.path.rstrip('/'), p.params, p.query, ''))
+    except:
+        return url
 
 SQLI_PARAMS = {
     "id", "cat", "user", "article", "page", "topic", "thread", "product",
@@ -78,6 +91,19 @@ def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock,
 
             filtered = [r for r in results if not is_blacklisted(r)]
             
+            # Normalization & De-duplication
+            normalized = [normalize_url(u) for u in filtered]
+            with seen_lock:
+                new_urls = []
+                for i, u in enumerate(normalized):
+                    if u not in seen_urls:
+                        seen_urls.add(u)
+                        new_urls.append(filtered[i])
+                filtered = new_urls
+
+            if not filtered:
+                continue
+
             sqli_hits = []
             leak_hits = []
             for url in filtered:
@@ -124,6 +150,8 @@ def main(threads=None, amount=None, prefix=None, stats=None):
     amount = amount or SCANNER_AMOUNT
     prefix = prefix or SCANNER_PREFIX
 
+    seen_urls.clear()
+
     print("\n" + "="*60)
     print("   MATADORKS BULK SCANNER v1.1 - No Tor, Just Speed")
     print("="*60 + "\n")
@@ -160,6 +188,11 @@ def main(threads=None, amount=None, prefix=None, stats=None):
         ("Bing", bing),
         ("Google", google)
     ]
+    if USE_STARTPAGE:
+        engines.insert(1, ("Startpage", startpage))
+    if USE_PUBLICWWW:
+        engines.append(("PublicWWW", publicwww))
+
     lock, internal_stats = threading.Lock(), {"total": 0, "sqli": 0, "leaks": 0}
     consecutive_failures = 0
 
@@ -191,7 +224,7 @@ def main(threads=None, amount=None, prefix=None, stats=None):
             if i % threads == 0:
                 time.sleep(0.3)
 
-    print(f"\n[!] Gotovo! SQLi: {internal_stats['sqli']} | Leaks: {internal_stats['leaks']}")
+    print(f"\n[!] Gotovo! SQLi: {internal_stats['sqli']} | Leaks: {internal_stats['leaks']} | Unique URLs: {len(seen_urls)}")
 
 if __name__ == "__main__":
     main()
