@@ -12,6 +12,7 @@ import time
 import random
 import threading
 import socket
+from queue import Queue, Empty
 from urllib.parse import urlparse, urlunparse, parse_qs
 socket.setdefaulttimeout(10)
 
@@ -19,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.search import (duckduckgo, startpage, brave, yandex, bing, google, publicwww)
 from core.proxy import get_google_pool
 from core.config import (
-    DOMAIN_BLACKLIST, DORKS_FILE, SCANNER_THREADS, SCANNER_AMOUNT,
+    DOMAIN_BLACKLIST, DORKS_FILE, SCANNER_THREADS, SCANNER_BATCH_SIZE, SCANNER_AMOUNT,
     SCANNER_PREFIX, CONSECUTIVE_FAILURE_THRESHOLD, COOLDOWN_SLEEP,
     USE_PUBLICWWW, USE_STARTPAGE
 )
@@ -77,10 +78,10 @@ def classify_result(url, dork):
         return "leak"
     return "general"
 
-def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock, stats, stats_obj=None):
+def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock, stats, out_q=None, stats_obj=None):
     proxy = pool.get_random()
-    fail_reasons = []
     
+    results_found = []
     for name, engine_func in engines:
         try:
             results = engine_func(dork, amount, proxy=proxy)
@@ -107,11 +108,15 @@ def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock,
             sqli_hits = []
             leak_hits = []
             for url in filtered:
+                if out_q:
+                    out_q.put(url)
                 kind = classify_result(url, dork)
                 if kind == "sqli":
                     sqli_hits.append(url)
                 elif kind == "leak":
                     leak_hits.append(url)
+            
+            results_found.extend(filtered)
 
             with lock:
                 with open(output_file, "a") as f:
@@ -145,32 +150,15 @@ def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock,
 
     return f"[-] {dork[:40]:<40} (failed)"
 
-def main(threads=None, amount=None, prefix=None, stats=None, abort=None):
+def run_worker(in_q, out_q, threads=None, amount=None, prefix=None, stats=None, abort=None):
     threads = threads or SCANNER_THREADS
     amount = amount or SCANNER_AMOUNT
     prefix = prefix or SCANNER_PREFIX
+    batch_size = SCANNER_BATCH_SIZE
 
-    seen_urls.clear()
-
-    print("\n" + "="*60)
-    print("   MATADORKS BULK SCANNER v1.1 - No Tor, Just Speed")
-    print("="*60 + "\n")
-
-    dork_path = DORKS_FILE
-    if not os.path.exists(dork_path):
-        print(f"[!] {dork_path} not found!")
-        return
-
-    with open(dork_path, "r") as f:
-        all_dorks = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-
-    print(f"[+] Loaded {len(all_dorks)} dorks.")
-    
     out_all, out_sqli, out_leak = f"data/{prefix}_all.txt", f"data/{prefix}_sqli_targets.txt", f"data/{prefix}_leaks.txt"
 
-    print("[!] Gradim masivni proxy pool...")
     pool = get_google_pool(auto_build=False)
-    # Masivno testiranje na pocetku
     pool.build(proto="socks5", max_test=5000, workers=400)
     pool.build(proto="http", max_test=3000, workers=400)
     
@@ -178,7 +166,8 @@ def main(threads=None, amount=None, prefix=None, stats=None, abort=None):
         stats.update(proxies_alive=pool.size())
 
     if pool.size() < 5:
-        print("[!] Premalo radnih proksija.")
+        print("[!] Premalo radnih proksija za skeniranje.")
+        out_q.put(None)
         return
 
     engines = [
@@ -195,41 +184,117 @@ def main(threads=None, amount=None, prefix=None, stats=None, abort=None):
 
     lock, internal_stats = threading.Lock(), {"total": 0, "sqli": 0, "leaks": 0}
     consecutive_failures = 0
-
-    print(f"\n[!] Skeniranje pocinje sa {pool.size()} proksija...\n")
+    total_processed = 0
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = [executor.submit(worker, d, amount, out_all, out_sqli, out_leak, pool, engines, lock, internal_stats, stats) for d in all_dorks]
-        for i, future in enumerate(as_completed(futures)):
+        active_futures = set()
+        while True:
             if abort and abort.is_set():
-                print("\n[!] Scanner aborted by user.")
-                executor.shutdown(wait=False, cancel_futures=True)
                 break
-
-            result_str = future.result()
-            print(f"[{i+1:>4}/{len(all_dorks)}] {result_str}")
-
-            if "(failed)" in result_str:
-                consecutive_failures += 1
+            
+            # Refill futures up to batch_size OR threads limit
+            refilled = 0
+            while len(active_futures) < threads and refilled < batch_size:
+                try:
+                    dork = in_q.get_nowait()
+                    refilled += 1
+                    if dork is None:
+                        in_q.task_done()
+                        goto_cleanup = True
+                        break
+                    
+                    future = executor.submit(worker, dork, amount, out_all, out_sqli, out_leak, pool, engines, lock, internal_stats, out_q, stats)
+                    # Add a callback to call task_done when future is finished
+                    future.add_done_callback(lambda f: in_q.task_done())
+                    active_futures.add(future)
+                    total_processed += 1
+                except Empty:
+                    break
             else:
-                consecutive_failures = 0
+                goto_cleanup = False
 
-            # Povecan prag na 20 gresaka i dodat cool-down
-            if consecutive_failures >= CONSECUTIVE_FAILURE_THRESHOLD:
-                print(f"\n\033[91m[!] {CONSECUTIVE_FAILURE_THRESHOLD} gresaka zaredom! Pool je spržen. Hlađenje {COOLDOWN_SLEEP}s i refetch...\033[0m")
-                time.sleep(COOLDOWN_SLEEP)
-                # Agresivniji refetch
-                pool.build(proto="socks5", max_test=5000, workers=400)
-                pool.build(proto="http", max_test=4000, workers=400)
-                if stats:
-                    stats.update(proxies_alive=pool.size())
-                consecutive_failures = 0
-                print(f"\n[!] Novi pool spreman: {pool.size()} proksija. Nastavljam...\n")
+            if not active_futures:
+                if 'goto_cleanup' in locals() and goto_cleanup:
+                    break
+                time.sleep(0.1)
+                continue
 
-            if i % threads == 0:
-                time.sleep(0.3)
+            # Check for completed futures
+            done, active_futures = wait_for_some(active_futures, timeout=0.1)
+            for future in done:
+                result_str = future.result()
+                print(f"[{total_processed - len(active_futures):>4}] {result_str}")
 
-    print(f"\n[!] Gotovo! SQLi: {internal_stats['sqli']} | Leaks: {internal_stats['leaks']} | Unique URLs: {len(seen_urls)}")
+                if "(failed)" in result_str:
+                    consecutive_failures += 1
+                else:
+                    consecutive_failures = 0
+
+                if consecutive_failures >= CONSECUTIVE_FAILURE_THRESHOLD:
+                    print(f"\n\033[91m[!] {CONSECUTIVE_FAILURE_THRESHOLD} gresaka zaredom! Hlađenje {COOLDOWN_SLEEP}s...\033[0m")
+                    time.sleep(COOLDOWN_SLEEP)
+                    pool.build(proto="socks5", max_test=2000, workers=200)
+                    if stats: stats.update(proxies_alive=pool.size())
+                    consecutive_failures = 0
+
+    out_q.put(None)
+    print(f"\n[!] Scanner worker finished. Total processed: {total_processed}")
+
+def wait_for_some(futures, timeout=None):
+    """Helper to wait for some futures to complete."""
+    done = set()
+    not_done = set(futures)
+    if not futures:
+        return done, not_done
+    
+    # as_completed is an iterator, we want non-blocking check if possible
+    # but concurrent.futures doesn't have a great "check all" without blocking
+    # we use a small timeout and check which are done
+    for f in futures:
+        if f.done():
+            done.add(f)
+            not_done.remove(f)
+    
+    if not done and timeout:
+        # Wait a bit if nothing is done
+        time.sleep(timeout)
+        for f in list(not_done):
+            if f.done():
+                done.add(f)
+                not_done.remove(f)
+                
+    return done, not_done
+
+def main(threads=None, amount=None, prefix=None, stats=None, abort=None):
+    seen_urls.clear()
+
+    print("\n" + "="*60)
+    print("   MATADORKS BULK SCANNER v1.2 - Queue Enabled")
+    print("="*60 + "\n")
+
+    dork_path = DORKS_FILE
+    if not os.path.exists(dork_path):
+        print(f"[!] {dork_path} not found!")
+        return
+
+    with open(dork_path, "r") as f:
+        all_dorks = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+    print(f"[+] Loaded {len(all_dorks)} dorks.")
+    
+    in_q = Queue()
+    out_q = Queue()
+
+    for d in all_dorks:
+        in_q.put(d)
+    in_q.put(None) # Sentinel
+
+    # Start run_worker in a way that we can monitor out_q if we want, 
+    # but for compatibility we can just call it.
+    run_worker(in_q, out_q, threads=threads, amount=amount, prefix=prefix, stats=stats, abort=abort)
+
+    # Optional: drain out_q if needed, though run_worker already put things there.
+    # In this standalone main, we don't really use out_q yet.
 
 if __name__ == "__main__":
     main()

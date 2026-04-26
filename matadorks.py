@@ -11,6 +11,7 @@ from core.logger import Logger, console
 from core.state import State
 from core.git_handler import GitHandler
 from core.stats import PipelineStats
+from core.queue_orchestrator import QueueManager
 from rich.panel import Panel
 from rich.live import Live
 from rich.table import Table
@@ -66,6 +67,7 @@ class MatadorksApp:
         self.git = GitHandler()
         self.version = "1.0.0"
         self.stats = PipelineStats()
+        self.queue_manager = QueueManager(stats=self.stats)
         self.no_tui = no_tui
         self._quit_requested = False
         self._skip_requested = False
@@ -102,7 +104,7 @@ class MatadorksApp:
         if self._paused:
             phase_color = "bold yellow"
         
-        status_text = f"Faza: [{phase_color}]{self.stats.phase.upper()}[/{phase_color}]"
+        status_text = f"Status: [{phase_color}]STREAMING PIPELINE[/{phase_color}]"
         if self._paused:
             status_text += " [blink yellow](PAUSED)[/blink yellow]"
         
@@ -111,6 +113,19 @@ class MatadorksApp:
             f"Proxiji: [bold green]{self.stats.proxies_alive}[/bold green] alive"
         )
         
+        # Queue Stats Table
+        q_table = Table.grid(expand=True)
+        q_table.add_column(ratio=1)
+        q_table.add_column(ratio=1)
+        q_table.add_column(ratio=1)
+        q_table.add_column(ratio=1)
+        q_table.add_row(
+            f"Dorks: [bold yellow]{self.stats.q_dork_size}[/bold yellow]",
+            f"URLs: [bold yellow]{self.stats.q_url_size}[/bold yellow]",
+            f"Valid: [bold blue]{self.stats.q_valid_size}[/bold blue]",
+            f"Vuln: [bold red]{self.stats.q_vuln_size}[/bold red]"
+        )
+
         stats_table = Table.grid(expand=True)
         stats_table.add_column(ratio=1)
         stats_table.add_column(ratio=1)
@@ -127,16 +142,17 @@ class MatadorksApp:
             ""
         )
         
-        footer = "[dim][Q] Quit  [S] Skip fazu  [P] Pauziraj[/dim]"
+        footer = "[dim][Q] Quit  [S] Skip phase  [P] Pause[/dim]"
 
         return Panel(
-            Group(table, Panel(stats_table, border_style="dim"), footer),
+            Group(table, Panel(q_table, title="Queue Status", border_style="yellow"), Panel(stats_table, border_style="dim"), footer),
             title="[bold red]MATADORKS LIVE[/bold red]",
             border_style="red"
         )
 
     def _dashboard_refresher(self):
         while not self._stop_refresh.is_set():
+            self.stats.update_queues(self.queue_manager)
             self._live.update(self.build_dashboard())
             self._stop_refresh.wait(0.5)
 
@@ -161,27 +177,32 @@ class MatadorksApp:
             self._execute_phases()
 
     def _execute_phases(self):
-        # Phase 1: Dorking
-        self.run_phase("Dorking", self.dorking_phase)
-        
-        # Phase 2: Proxy Building
+        # Phase 1: Dorking (feeds the pipeline)
+        self.stats.update(phase="Dorking")
+        self.logger.status("Generating dorks...")
+        from modules.dorker import generate_all
+        dorks = generate_all()
+        output_path = "data/sqli_dorks.txt"
+        with open(output_path, "w") as f:
+            for d in dorks: f.write(d + "\n")
+        self.logger.info(f"Generated {len(dorks)} dorks.")
+
+        # Phase 2: Proxy Building (Needed for scanning)
         self.run_phase("Proxy Building", self.proxy_phase)
 
-        # Phase 3: Scanning
-        self.run_phase("Scanning", self.scanning_phase)
+        # Start the Streaming Pipeline
+        self.logger.status("Starting Real-time Pipeline...")
+        self.queue_manager.start_pipeline(self)
+        
+        # Feed dorks to start the flow
+        self.queue_manager.push_dorks(dorks)
 
-        # Phase 4: Validating
-        self.run_phase("Validating", self.validating_phase)
-
-        # Phase 5: Injecting
-        self.run_phase("Injecting", self.injecting_phase)
-
-        # Phase 6: Exploiting
-        self.run_phase("Exploiting", self.exploiting_phase)
+        # Wait for all workers to finish
+        self.queue_manager.wait_for_completion()
 
         if not self._quit_requested:
-            self.logger.success("All phases completed successfully!")
-            self.git.commit("Matadorks: Full pipeline execution completed.")
+            self.logger.success("Streaming Pipeline finished!")
+            self.git.commit("Matadorks: Completed reactive pipeline execution.")
 
     def run_phase(self, name, func):
         if self._quit_requested:
@@ -238,7 +259,7 @@ class MatadorksApp:
         pool = get_google_pool(auto_build=False)
         self.logger.info("Building proxy pool...")
         # In a real scenario, we would pass stats to pool.build
-        pool.build(max_test=5000, workers=200)
+        pool.build(max_test=5000, workers=200, abort=self._abort_phase)
         self.stats.update(proxies_alive=pool.size())
         self.logger.info(f"Proxy pool built with {pool.size()} working proxies.")
 
@@ -263,7 +284,7 @@ class MatadorksApp:
     def exploiting_phase(self):
         from modules.exploiter import main as exploiter_main
         self.logger.info("Starting exploitation phase...")
-        exploiter_main(input_file="data/vulnerable_targets.txt", summary_file="data/pwned_summary.txt", log_file="data/exploitation.log", stats=self.stats)
+        exploiter_main(input_file="data/vulnerable_targets.txt", summary_file="data/pwned_summary.txt", log_file="data/exploitation.log", stats=self.stats, abort=self._abort_phase)
         self.logger.success("Exploitation phase completed.")
 
 if __name__ == "__main__":

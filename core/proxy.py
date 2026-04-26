@@ -116,7 +116,7 @@ class ProxyPool:
         except: pass
         return None
 
-    async def build_async(self, proto="socks5", max_test=10000, min_working=100, workers=100, verbose=True):
+    async def build_async(self, proto="socks5", max_test=10000, min_working=100, workers=100, verbose=True, abort=None):
         if verbose: print(f"\n[proxy] Započinjem masovni fetch (Limit: {max_test})...")
         
         raw_data = self.fetch_raw(proto)
@@ -146,8 +146,14 @@ class ProxyPool:
 
         # Procesiraj u grupama od 1000 radi stabilnosti
         for i in range(0, len(candidates), 1000):
+            if abort and abort.is_set():
+                if verbose: print("\n[proxy] Prekidam TCP ping (User requested abort)")
+                break
             await check_batch_tcp(candidates[i:i+1000])
             if verbose: print(f"[proxy] TCP Alive: {len(passed_tcp)}", end='\r')
+
+        if abort and abort.is_set():
+            return 0
 
         if verbose: print(f"\n[proxy] Faza 2: HTTP Validation na {len(passed_tcp)} proksija sa {workers} workers...")
 
@@ -156,6 +162,10 @@ class ProxyPool:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {executor.submit(self._test_http, p, proto, src): (p, src) for p, src in passed_tcp}
             for fut in as_completed(futures):
+                if abort and abort.is_set():
+                    if verbose: print("\n[proxy] Prekidam HTTP validaciju (User requested abort)")
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    break
                 p, src = futures[fut]
                 res = fut.result()
                 

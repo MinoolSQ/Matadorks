@@ -2,6 +2,7 @@
 import os
 import subprocess
 import threading
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from core.config import (
@@ -37,13 +38,14 @@ def _build_ghauri_args(url):
     ]
 
 class SQLMapManager:
-    def __init__(self, input_file, output_file, max_scans, stats=None):
-        self.input_file = input_file
-        self.output_file = output_file
+    def __init__(self, in_q, out_q, max_scans, stats=None):
+        self.in_q = in_q
+        self.out_q = out_q
         self.max_scans = max_scans
         self.lock = threading.Lock()
         self.vulnerable_count = 0
         self.stats = stats
+        self._ghauri_available = False
 
     def check_sqlmap_installed(self):
         try:
@@ -60,13 +62,14 @@ class SQLMapManager:
             return False
 
     def scan_target(self, url):
-        print(f"[*] Pokrećem SQLMap na: {url}")
+        print(f"[*] Testing: {url}")
         
-        # Formatiranje komande
         cmd = _build_sqlmap_args(url)
-        
+        is_vulnerable = False
+        dbms = SQLMAP_DBMS or "Unknown"
+        vuln_type = "SQL Injection"
+
         try:
-            # Pokretanje procesa
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -74,24 +77,21 @@ class SQLMapManager:
                 text=True
             )
             
-            # Pratimo output u realnom vremenu za kljucne reci
-            is_vulnerable = False
             try:
-                # Cekamo do timeout-a
                 stdout, stderr = process.communicate(timeout=SQLMAP_SCAN_TIMEOUT)
-                
-                # Provera da li je sqlmap nasao ranjivost
-                # SQLMap obicno ispisuje "is vulnerable" ili "injectable"
                 if "is vulnerable" in stdout or "injectable" in stdout or "fetching" in stdout:
                     is_vulnerable = True
+                    # Try to extract DBMS from output if it was unknown
+                    if not SQLMAP_DBMS:
+                        match = re.search(r"back-end DBMS: ([\w\s]+)", stdout)
+                        if match:
+                            dbms = match.group(1).strip()
             except subprocess.TimeoutExpired:
                 process.kill()
-                print(f"[!] Timeout za {url} - prekidam.")
-                return None
+                print(f"[!] Timeout for {url}")
+                return
 
-            # Fallback na Ghauri ako sqlmap nije nasao nista
             if not is_vulnerable and self._ghauri_available:
-                print(f"[*] SQLMap failed, trying Ghauri on: {url}")
                 ghauri_cmd = _build_ghauri_args(url)
                 try:
                     ghauri_process = subprocess.Popen(
@@ -101,78 +101,62 @@ class SQLMapManager:
                         text=True
                     )
                     g_stdout, g_stderr = ghauri_process.communicate(timeout=SQLMAP_SCAN_TIMEOUT)
-                    
-                    # Ghauri output parsing
                     g_stdout_lower = g_stdout.lower()
                     if ("is vulnerable" in g_stdout_lower or 
                         ("parameter" in g_stdout_lower and "injectable" in g_stdout_lower) or 
                         "current database" in g_stdout_lower):
                         is_vulnerable = True
-                        print(f"[+] Ghauri pronašao ranjivost na: {url}")
+                        print(f"[+] Ghauri found vulnerability: {url}")
                 except subprocess.TimeoutExpired:
                     ghauri_process.kill()
-                    print(f"[!] Ghauri timeout za {url}")
-                except Exception as e:
-                    print(f"[!] Ghauri greška: {e}")
 
             if is_vulnerable:
                 with self.lock:
                     self.vulnerable_count += 1
                     if self.stats:
                         self.stats.update(vulnerable=self.vulnerable_count)
-                    with open(self.output_file, "a") as f:
-                        f.write(f"[VULNERABLE] {url}\n")
-                return f"[+] RANJIV: {url}"
+                
+                vuln_data = {
+                    "url": url,
+                    "dbms": dbms,
+                    "type": vuln_type
+                }
+                self.out_q.put(vuln_data)
+                print(f"[+] VULNERABLE: {url} ({dbms})")
             else:
-                return f"[-] Nije ranjiv: {url}"
+                pass # Silent for non-vulnerable to reduce noise
 
         except Exception as e:
-            return f"[!] Greška kod {url}: {str(e)}"
+            print(f"[!] Error scanning {url}: {e}")
 
     def run(self):
         if not self.check_sqlmap_installed():
-            print("[!] SQLMap nije instaliran ili nije u PATH-u!")
-            print("[!] Instaliraj ga sa: sudo apt install sqlmap")
+            print("[!] SQLMap not found!")
             return
 
         self._ghauri_available = USE_GHAURI_FALLBACK and self.check_ghauri_installed()
-        if USE_GHAURI_FALLBACK and not self._ghauri_available:
-            print("[!] Ghauri nije instaliran — fallback onemogućen.")
 
-        if not os.path.exists(self.input_file):
-            print(f"[!] Ulazni fajl {self.input_file} nije pronađen.")
-            return
-
-        with open(self.input_file, "r") as f:
-            targets = [line.strip() for line in f if line.strip()]
-
-        if not targets:
-            print("[!] Nema linkova za skeniranje.")
-            return
-
-        print(f"\n[!] Započinjem SQLMap fazu na {len(targets)} meta...")
-        print(f"[!] Paralelnih skenova: {self.max_scans}\n")
-
+        print(f"[*] Injector started (Threads: {self.max_scans})")
+        
         with ThreadPoolExecutor(max_workers=self.max_scans) as executor:
-            futures = [executor.submit(self.scan_target, url) for url in targets]
-            for future in as_completed(futures):
-                if self.abort and self.abort.is_set():
-                    print("\n[!] Injector aborted by user.")
-                    executor.shutdown(wait=False, cancel_futures=True)
+            while True:
+                target = self.in_q.get()
+                if target is None:
                     break
-                res = future.result()
-                if res:
-                    print(res)
+                executor.submit(self.scan_target, target)
 
-        print(f"\n[#] SQLMap faza završena!")
-        print(f"[#] Pronađeno ranjivih meta: {self.vulnerable_count}")
-        print(f"[#] Rezultati sačuvani u: {self.output_file}")
+        self.out_q.put(None)
+        print(f"[*] Injector finished. Found {self.vulnerable_count} vulnerable targets.")
 
-def main(input_file=None, output_file=None, max_scans=None, stats=None):
-    input_file = input_file or VALIDATED_FILE
-    output_file = output_file or VULNERABLE_FILE
+def main(in_q=None, out_q=None, max_scans=None, stats=None):
+    import queue
+    # This main is mostly for standalone testing if needed, 
+    # but the real app will pass queues.
+    if in_q is None:
+        return
+    
     max_scans = max_scans or SQLMAP_CONCURRENT_SCANS
-    manager = SQLMapManager(input_file, output_file, max_scans, stats=stats)
+    manager = SQLMapManager(in_q, out_q, max_scans, stats=stats)
     manager.run()
 
 if __name__ == "__main__":
