@@ -1,5 +1,8 @@
 import os
 import sys
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 from core.logger import Logger
 from core.state import State
 from core.git_handler import GitHandler
