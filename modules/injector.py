@@ -156,6 +156,10 @@ class SQLMapManager:
         with ThreadPoolExecutor(max_workers=self.max_scans) as executor:
             futures = [executor.submit(self.scan_target, url) for url in targets]
             for future in as_completed(futures):
+                if self.abort and self.abort.is_set():
+                    print("\n[!] Injector aborted by user.")
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    break
                 res = future.result()
                 if res:
                     print(res)

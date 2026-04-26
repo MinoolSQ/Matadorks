@@ -145,7 +145,7 @@ def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock,
 
     return f"[-] {dork[:40]:<40} (failed)"
 
-def main(threads=None, amount=None, prefix=None, stats=None):
+def main(threads=None, amount=None, prefix=None, stats=None, abort=None):
     threads = threads or SCANNER_THREADS
     amount = amount or SCANNER_AMOUNT
     prefix = prefix or SCANNER_PREFIX
@@ -201,9 +201,14 @@ def main(threads=None, amount=None, prefix=None, stats=None):
     with ThreadPoolExecutor(max_workers=threads) as executor:
         futures = [executor.submit(worker, d, amount, out_all, out_sqli, out_leak, pool, engines, lock, internal_stats, stats) for d in all_dorks]
         for i, future in enumerate(as_completed(futures)):
+            if abort and abort.is_set():
+                print("\n[!] Scanner aborted by user.")
+                executor.shutdown(wait=False, cancel_futures=True)
+                break
+
             result_str = future.result()
             print(f"[{i+1:>4}/{len(all_dorks)}] {result_str}")
-            
+
             if "(failed)" in result_str:
                 consecutive_failures += 1
             else:

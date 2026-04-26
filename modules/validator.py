@@ -27,6 +27,11 @@ class Validator:
     def check_url(self):
         """Worker thread to check URL status."""
         while not self.queue.empty():
+            if getattr(self, 'abort', None) and self.abort.is_set():
+                while not self.queue.empty():
+                    self.queue.get()
+                    self.queue.task_done()
+                return
             url = self.queue.get()
             try:
                 # Use a generic User-Agent to avoid simple blocks
@@ -83,7 +88,6 @@ class Validator:
         for link in filtered_links:
             self.queue.put(link)
 
-        # Start threads
         for _ in range(self.threads):
             t = threading.Thread(target=self.check_url)
             t.daemon = True
@@ -100,11 +104,12 @@ class Validator:
         print(f"[#] Total valid links saved: {len(self.valid_urls)}")
         print(f"[#] Output saved to: {self.output_file}")
 
-def main(input_file=None, output_file=None, threads=None, stats=None):
-    input_file = input_file or "data/matadorks_sqli_targets.txt"  # ISPRAVNA PUTANJA
+def main(input_file=None, output_file=None, threads=None, stats=None, abort=None):
+    input_file = input_file or "data/matadorks_sqli_targets.txt"
     output_file = output_file or VALIDATED_FILE
     threads = threads or VALIDATOR_THREADS
     validator = Validator(input_file, output_file, threads, stats=stats)
+    validator.abort = abort
     validator.run()
 
 if __name__ == "__main__":

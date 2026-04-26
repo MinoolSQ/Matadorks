@@ -1,5 +1,7 @@
 import os
 import sys
+import warnings
+warnings.filterwarnings("ignore")
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import threading
@@ -44,8 +46,9 @@ class KeyboardListener(threading.Thread):
                         self.app._quit_requested = True
                         break
                     elif char == 's':
-                        self.app.logger.warning("Skip phase requested...")
+                        self.app.logger.warning("Skip phase requested — aborting current phase...")
                         self.app._skip_requested = True
+                        self.app._abort_phase.set()
                     elif char == 'p':
                         self.app._paused = not self.app._paused
                         status = "PAUSED" if self.app._paused else "RESUMED"
@@ -67,6 +70,7 @@ class MatadorksApp:
         self._quit_requested = False
         self._skip_requested = False
         self._paused = False
+        self._abort_phase = threading.Event()
 
     def sync_dependencies(self):
         self.logger.status("Synchronizing dependencies with uv...")
@@ -205,8 +209,8 @@ class MatadorksApp:
                     return
 
             func()
-            
-            # Check for skip after func (if it's long running and updated flag)
+            self._abort_phase.clear()
+
             if self._skip_requested:
                 self._skip_requested = False
                 self.logger.warning(f"Phase {name} SKIPPED by user during execution.")
@@ -241,19 +245,19 @@ class MatadorksApp:
     def scanning_phase(self):
         from modules.scanner import main as scanner_main
         self.logger.info("Starting bulk scanning...")
-        scanner_main(threads=20, amount=50, prefix="matadorks", stats=self.stats)
+        scanner_main(threads=20, amount=50, prefix="matadorks", stats=self.stats, abort=self._abort_phase)
         self.logger.success("Scanning completed.")
 
     def validating_phase(self):
         from modules.validator import main as validator_main
         self.logger.info("Starting target validation...")
-        validator_main(input_file="data/matadorks_sqli_targets.txt", output_file="data/validated_targets.txt", stats=self.stats)
+        validator_main(input_file="data/matadorks_sqli_targets.txt", output_file="data/validated_targets.txt", stats=self.stats, abort=self._abort_phase)
         self.logger.success("Validation completed.")
 
     def injecting_phase(self):
         from modules.injector import main as injector_main
         self.logger.info("Starting SQLMap injection phase...")
-        injector_main(input_file="data/validated_targets.txt", output_file="data/vulnerable_targets.txt", stats=self.stats)
+        injector_main(input_file="data/validated_targets.txt", output_file="data/vulnerable_targets.txt", stats=self.stats, abort=self._abort_phase)
         self.logger.success("Injection phase completed.")
 
     def exploiting_phase(self):
