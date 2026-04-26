@@ -7,7 +7,8 @@ import sys
 from core.config import (
     VALIDATED_FILE, VULNERABLE_FILE,
     SQLMAP_LEVEL, SQLMAP_RISK, SQLMAP_SCAN_TIMEOUT,
-    SQLMAP_CONCURRENT_SCANS, SQLMAP_DBMS
+    SQLMAP_CONCURRENT_SCANS, SQLMAP_DBMS,
+    USE_GHAURI_FALLBACK
 )
 
 def _build_sqlmap_args(url):
@@ -26,6 +27,15 @@ def _build_sqlmap_args(url):
         args.append(f"--dbms={SQLMAP_DBMS}")
     return args
 
+def _build_ghauri_args(url):
+    return [
+        "ghauri", "-u", url,
+        "--batch",
+        "--dbs",
+        "--current-db",
+        "--current-user",
+    ]
+
 class SQLMapManager:
     def __init__(self, input_file, output_file, max_scans, stats=None):
         self.input_file = input_file
@@ -38,6 +48,13 @@ class SQLMapManager:
     def check_sqlmap_installed(self):
         try:
             subprocess.run(["sqlmap", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        except FileNotFoundError:
+            return False
+
+    def check_ghauri_installed(self):
+        try:
+            subprocess.run(["ghauri", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True
         except FileNotFoundError:
             return False
@@ -72,6 +89,32 @@ class SQLMapManager:
                 print(f"[!] Timeout za {url} - prekidam.")
                 return None
 
+            # Fallback na Ghauri ako sqlmap nije nasao nista
+            if not is_vulnerable and self._ghauri_available:
+                print(f"[*] SQLMap failed, trying Ghauri on: {url}")
+                ghauri_cmd = _build_ghauri_args(url)
+                try:
+                    ghauri_process = subprocess.Popen(
+                        ghauri_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    g_stdout, g_stderr = ghauri_process.communicate(timeout=SQLMAP_SCAN_TIMEOUT)
+                    
+                    # Ghauri output parsing
+                    g_stdout_lower = g_stdout.lower()
+                    if ("is vulnerable" in g_stdout_lower or 
+                        ("parameter" in g_stdout_lower and "injectable" in g_stdout_lower) or 
+                        "current database" in g_stdout_lower):
+                        is_vulnerable = True
+                        print(f"[+] Ghauri pronašao ranjivost na: {url}")
+                except subprocess.TimeoutExpired:
+                    ghauri_process.kill()
+                    print(f"[!] Ghauri timeout za {url}")
+                except Exception as e:
+                    print(f"[!] Ghauri greška: {e}")
+
             if is_vulnerable:
                 with self.lock:
                     self.vulnerable_count += 1
@@ -79,7 +122,7 @@ class SQLMapManager:
                         self.stats.update(vulnerable=self.vulnerable_count)
                     with open(self.output_file, "a") as f:
                         f.write(f"[VULNERABLE] {url}\n")
-                return f"[+] RAGNJIV: {url}"
+                return f"[+] RANJIV: {url}"
             else:
                 return f"[-] Nije ranjiv: {url}"
 
@@ -91,6 +134,10 @@ class SQLMapManager:
             print("[!] SQLMap nije instaliran ili nije u PATH-u!")
             print("[!] Instaliraj ga sa: sudo apt install sqlmap")
             return
+
+        self._ghauri_available = USE_GHAURI_FALLBACK and self.check_ghauri_installed()
+        if USE_GHAURI_FALLBACK and not self._ghauri_available:
+            print("[!] Ghauri nije instaliran — fallback onemogućen.")
 
         if not os.path.exists(self.input_file):
             print(f"[!] Ulazni fajl {self.input_file} nije pronađen.")
