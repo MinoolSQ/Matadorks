@@ -1,0 +1,4 @@
+inurl:"?clanek="
+inurl:"?produkt="
+inurl:"?uzivatel="
+inurl:"?kategorie="

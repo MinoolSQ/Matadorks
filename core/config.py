@@ -2,6 +2,7 @@ import os
 
 # --- Paths ---
 DATA_DIR = "data"
+DORKS_DATA_DIR = os.path.join(DATA_DIR, "dorks")
 STATE_FILE = os.path.join(DATA_DIR, "state.json")
 DORKS_FILE = os.path.join(DATA_DIR, "sqli_dorks.txt")
 VALIDATED_FILE = os.path.join(DATA_DIR, "validated_targets.txt")

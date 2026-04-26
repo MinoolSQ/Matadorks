@@ -1,0 +1,12 @@
+# SQL Error Fingerprints
+intext:"You have an error in your SQL syntax"
+intext:"Warning: mysql_fetch_array()"
+intext:"Warning: mysqli_num_rows()"
+intext:"Warning: mysql_num_rows()"
+intext:"Warning: pg_query()"
+intext:"ORA-01756:"
+intext:"Microsoft OLE DB Provider for SQL Server"
+intext:"Unclosed quotation mark after the character string"
+intext:"supplied argument is not a valid MySQL"
+intext:"mysql_connect(): The mysql extension is deprecated"
+intext:"mysqli_fetch_assoc() expects"

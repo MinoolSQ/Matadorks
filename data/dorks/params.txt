@@ -1,0 +1,13 @@
+# Vulnerable URL parameters (SQLi entry points)
+inurl:"?id="
+inurl:"?cat="
+inurl:"?user="
+inurl:"?article="
+inurl:"?page="
+inurl:"?topic="
+inurl:"?thread="
+inurl:"?product="
+inurl:"?item="
+inurl:"?news_id="
+inurl:"?post_id="
+inurl:"?profile_id="

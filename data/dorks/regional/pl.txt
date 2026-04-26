@@ -1,0 +1,5 @@
+inurl:"?artykul="
+inurl:"?produkt="
+inurl:"?uzytkownik="
+inurl:"?kategoria="
+inurl:"?temat="
