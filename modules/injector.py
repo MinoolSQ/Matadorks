@@ -27,12 +27,13 @@ def _build_sqlmap_args(url):
     return args
 
 class SQLMapManager:
-    def __init__(self, input_file, output_file, max_scans):
+    def __init__(self, input_file, output_file, max_scans, stats=None):
         self.input_file = input_file
         self.output_file = output_file
         self.max_scans = max_scans
         self.lock = threading.Lock()
         self.vulnerable_count = 0
+        self.stats = stats
 
     def check_sqlmap_installed(self):
         try:
@@ -74,6 +75,8 @@ class SQLMapManager:
             if is_vulnerable:
                 with self.lock:
                     self.vulnerable_count += 1
+                    if self.stats:
+                        self.stats.update(vulnerable=self.vulnerable_count)
                     with open(self.output_file, "a") as f:
                         f.write(f"[VULNERABLE] {url}\n")
                 return f"[+] RAGNJIV: {url}"
@@ -114,11 +117,11 @@ class SQLMapManager:
         print(f"[#] Pronađeno ranjivih meta: {self.vulnerable_count}")
         print(f"[#] Rezultati sačuvani u: {self.output_file}")
 
-def main(input_file=None, output_file=None, max_scans=None):
+def main(input_file=None, output_file=None, max_scans=None, stats=None):
     input_file = input_file or VALIDATED_FILE
     output_file = output_file or VULNERABLE_FILE
     max_scans = max_scans or SQLMAP_CONCURRENT_SCANS
-    manager = SQLMapManager(input_file, output_file, max_scans)
+    manager = SQLMapManager(input_file, output_file, max_scans, stats=stats)
     manager.run()
 
 if __name__ == "__main__":
