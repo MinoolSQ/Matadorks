@@ -18,18 +18,12 @@ socket.setdefaulttimeout(10)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.search import (duckduckgo, startpage, brave, yandex, bing, google)
 from core.proxy import get_google_pool
+from core.config import (
+    DOMAIN_BLACKLIST, DORKS_FILE, SCANNER_THREADS, SCANNER_AMOUNT,
+    SCANNER_PREFIX, CONSECUTIVE_FAILURE_THRESHOLD, COOLDOWN_SLEEP
+)
 
 # --- CONFIG & BLACKLIST ---
-BLACKLIST = [
-    "youtube.com", "youtu.be", "reddit.com", "quora.com", "stackoverflow.com",
-    "github.com", "github.io", "gitlab.com", "medium.com", "dev.to",
-    "facebook.com", "twitter.com", "x.com", "linkedin.com", "instagram.com",
-    "wikipedia.org", "w3schools.com", "geeksforgeeks.org", "microsoft.com",
-    "google.com", "bing.com", "duckduckgo.com", "brave.com", "yandex.com",
-    "torproject.org", "npmjs.com", "pypi.org", "hackerone.com", "bugcrowd.com",
-    "exploit-db.com", "rapid7.com", "packetstormsecurity.com",
-    "php.net", "bugs.php.net", "ni.com", "support.microsoft.com", "docs.microsoft.com"
-]
 
 SQLI_PARAMS = {
     "id", "cat", "user", "article", "page", "topic", "thread", "product",
@@ -49,7 +43,7 @@ SQL_ERROR_MARKERS = [
 
 def is_blacklisted(url):
     url_lower = url.lower()
-    return any(domain in url_lower for domain in BLACKLIST)
+    return any(domain in url_lower for domain in DOMAIN_BLACKLIST)
 
 def is_sqli_candidate(url, dork=""):
     dork_lower = dork.lower()
@@ -122,11 +116,15 @@ def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock,
     return f"[-] {dork[:40]:<40} (failed)"
 
 def main(threads=None, amount=None, prefix=None):
+    threads = threads or SCANNER_THREADS
+    amount = amount or SCANNER_AMOUNT
+    prefix = prefix or SCANNER_PREFIX
+
     print("\n" + "="*60)
     print("   MATADORKS BULK SCANNER v1.1 - No Tor, Just Speed")
     print("="*60 + "\n")
 
-    dork_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data/sqli_dorks.txt")
+    dork_path = DORKS_FILE
     if not os.path.exists(dork_path):
         print(f"[!] {dork_path} not found!")
         return
@@ -136,13 +134,6 @@ def main(threads=None, amount=None, prefix=None):
 
     print(f"[+] Loaded {len(all_dorks)} dorks.")
     
-    if threads is None:
-        threads = int(input("[+] Number of parallel threads (recommend 15-30): "))
-    if amount is None:
-        amount = int(input("[+] Results per dork: "))
-    if prefix is None:
-        prefix = input("[+] File prefix: ")
-
     out_all, out_sqli, out_leak = f"data/{prefix}_all.txt", f"data/{prefix}_sqli_targets.txt", f"data/{prefix}_leaks.txt"
 
     print("[!] Gradim masivni proxy pool...")
@@ -179,9 +170,9 @@ def main(threads=None, amount=None, prefix=None):
                 consecutive_failures = 0
 
             # Povecan prag na 20 gresaka i dodat cool-down
-            if consecutive_failures >= 20:
-                print(f"\n\033[91m[!] 20 gresaka zaredom! Pool je spržen. Hlađenje 45s i refetch...\033[0m")
-                time.sleep(45)
+            if consecutive_failures >= CONSECUTIVE_FAILURE_THRESHOLD:
+                print(f"\n\033[91m[!] {CONSECUTIVE_FAILURE_THRESHOLD} gresaka zaredom! Pool je spržen. Hlađenje {COOLDOWN_SLEEP}s i refetch...\033[0m")
+                time.sleep(COOLDOWN_SLEEP)
                 # Agresivniji refetch
                 pool.build(proto="socks5", max_test=5000, workers=400)
                 pool.build(proto="http", max_test=4000, workers=400)
