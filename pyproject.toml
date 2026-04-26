@@ -2,7 +2,7 @@
 name = "matadorks"
 version = "1.0.0"
 description = "Unified Autonomous SQLi Pipeline"
-readme = "ostava/arhiva/README.md"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "requests>=2.31.0",
