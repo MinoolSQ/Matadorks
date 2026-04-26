@@ -1,0 +1,17 @@
+# Modern Leaks (post-2021)
+intext:"DATABASE_URL=postgres" filetype:env
+intext:"APP_KEY=base64:" filetype:env
+intext:"NEXT_PUBLIC_" filetype:env
+intext:"DISCORD_TOKEN" filetype:env
+intext:"STRIPE_SECRET_KEY" filetype:env
+intext:"supabase.co" intext:"service_role" filetype:env
+intext:"mongodb+srv://" filetype:env
+intext:"TELEGRAM_BOT_TOKEN" filetype:env
+intitle:"Whoops!" intext:"APP_KEY"
+intext:"Illuminate\Database" intext:"password"
+inurl:"/.git/config" intext:"url ="
+intitle:"index of" "config.php.bak"
+intitle:"index of" "wp-config.php.bak"
+intitle:"index of" "database.sql"
+intitle:"index of" "users.sql"
+intitle:"index of" ".env"

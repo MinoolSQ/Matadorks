@@ -1,0 +1,4 @@
+inurl:"?articol="
+inurl:"?produs="
+inurl:"?utilizator="
+inurl:"?categorie="
