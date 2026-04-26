@@ -223,7 +223,10 @@ def run_worker(in_q, out_q, threads=None, amount=None, prefix=None, stats=None, 
             done, active_futures = wait_for_some(active_futures, timeout=0.1)
             for future in done:
                 result_str = future.result()
-                print(f"[{total_processed - len(active_futures):>4}] {result_str}")
+                
+                # Prikazuj samo ako je nesto pronadjeno ili ako je greska kriticna
+                if "[0 url]" not in result_str:
+                    print(f"[{total_processed - len(active_futures):>4}] {result_str}")
 
                 if "(failed)" in result_str:
                     consecutive_failures += 1

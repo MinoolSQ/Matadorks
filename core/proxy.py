@@ -6,6 +6,8 @@ import threading
 import asyncio
 import socket
 import re
+import os
+import json
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
@@ -37,6 +39,7 @@ def get_dynamic_sources():
     }
 
 from core.config import TCP_TIMEOUT, HTTP_TIMEOUT, TEST_URLS, PROXY_MAX_TEST, PROXY_WORKERS
+from core.proxy_sources.github_api import GitHubProxyFetcher, SOURCES as GH_SOURCES
 
 class ProxyPool:
     def __init__(self):
@@ -49,6 +52,10 @@ class ProxyPool:
         for proto in sources:
             for url in sources[proto]:
                 self.source_stats[url] = {"success": 0, "total": 0, "score": 0.0}
+        
+        # Add GitHub sources
+        for url in GH_SOURCES:
+            self.source_stats[url] = {"success": 0, "total": 0, "score": 0.0}
 
     def fetch_raw(self, proto="socks5"):
         """Paralelno povlacenje listi koristeci threadove za I/O."""
@@ -119,6 +126,13 @@ class ProxyPool:
     async def build_async(self, proto="socks5", max_test=10000, min_working=100, workers=100, verbose=True, abort=None):
         if verbose: print(f"\n[proxy] Započinjem masovni fetch (Limit: {max_test})...")
         
+        # Phase 0: GitHub Fresh API (HTTP only)
+        passed_tcp = []
+        if proto == "http":
+            gh_fetcher = GitHubProxyFetcher()
+            passed_tcp = await gh_fetcher.run_async()
+            if verbose: print(f"[proxy] GitHub API: {len(passed_tcp)} passed TCP check.")
+
         raw_data = self.fetch_raw(proto)
         # Deduplikacija
         unique_map = {}
@@ -131,7 +145,6 @@ class ProxyPool:
         # --- PHASE 1: ASYNC TCP PING ---
         if verbose: print(f"[proxy] Faza 1: TCP Port Knocking (Hiljade paralelnih konekcija)...")
         
-        passed_tcp = []
         async def check_batch_tcp(batch):
             tasks = []
             for p, src in batch:

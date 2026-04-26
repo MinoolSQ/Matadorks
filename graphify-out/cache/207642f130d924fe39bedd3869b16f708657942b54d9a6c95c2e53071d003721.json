@@ -1,0 +1,1 @@
+{"nodes": [{"id": "archive_gemini_log", "label": "Gemini CLI Brain Log", "file_type": "document", "source_file": "ostava/arhiva/GEMINI_LOG.md"}], "edges": [{"source": "archive_gemini_log", "target": "stealth_scanning", "relation": "implements", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "ostava/arhiva/GEMINI_LOG.md"}], "hyperedges": []}

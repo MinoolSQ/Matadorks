@@ -1,0 +1,1 @@
+{"nodes": [{"id": "dork_vulnerable_params", "label": "Vulnerable SQLi Parameter Dorks", "file_type": "document", "source_file": "data/dorks/params.txt", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}
