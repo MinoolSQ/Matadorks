@@ -82,7 +82,7 @@ def google(dork, amount, proxy=None):
     """Google pretrazivanje kroz rotacijski proxy pool (free proxy liste).
     'proxy' parametar se ignorise — koristi interni pool koji podrzava Google."""
     try:
-        from proxy_pool import get_google_pool
+        from core.proxy import get_google_pool
         pool = get_google_pool(auto_build=False)  # pool se gradi u main(), ne ovdje
     except ImportError:
         pool = None

@@ -44,12 +44,13 @@ def generate_light_dorks():
 
     return sorted(list(dorks))
 
-all_dorks = generate_light_dorks()
-random.shuffle(all_dorks)
+if __name__ == "__main__":
+    all_dorks = generate_light_dorks()
+    random.shuffle(all_dorks)
 
-with open("massive_niche_dorks_2026.txt", "w") as f:
-    f.write(f"# Generated {len(all_dorks)} LIGHTWEIGHT Dorks\n")
-    for dork in all_dorks:
-        f.write(dork + "\n")
+    with open("massive_niche_dorks_2026.txt", "w") as f:
+        f.write(f"# Generated {len(all_dorks)} LIGHTWEIGHT Dorks\n")
+        for dork in all_dorks:
+            f.write(dork + "\n")
 
-print(f"Generisano {len(all_dorks)} laksih dorkova.")
+    print(f"Generisano {len(all_dorks)} laksih dorkova.")
