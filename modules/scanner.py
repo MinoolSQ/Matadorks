@@ -64,7 +64,7 @@ def classify_result(url, dork):
         return "leak"
     return "general"
 
-def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock, stats):
+def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock, stats, stats_obj=None):
     proxy = pool.get_random()
     fail_reasons = []
     
@@ -96,6 +96,8 @@ def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock,
                     with open(sqli_file, "a") as f:
                         for url in sqli_hits: f.write(url + "\n")
                     stats["sqli"] += len(sqli_hits)
+                    if stats_obj:
+                        stats_obj.update(sqli_hits=stats["sqli"])
                 
                 if leak_hits:
                     with open(leak_file, "a") as f:
@@ -103,6 +105,8 @@ def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock,
                     stats["leaks"] += len(leak_hits)
                 
                 stats["total"] += len(filtered)
+                if stats_obj:
+                    stats_obj.update(urls_scanned=stats["total"])
 
             tag = f" [{len(filtered)} url]"
             if sqli_hits: tag += f" [SQLi:{len(sqli_hits)}]"
@@ -115,7 +119,7 @@ def worker(dork, amount, output_file, sqli_file, leak_file, pool, engines, lock,
 
     return f"[-] {dork[:40]:<40} (failed)"
 
-def main(threads=None, amount=None, prefix=None):
+def main(threads=None, amount=None, prefix=None, stats=None):
     threads = threads or SCANNER_THREADS
     amount = amount or SCANNER_AMOUNT
     prefix = prefix or SCANNER_PREFIX
@@ -142,6 +146,9 @@ def main(threads=None, amount=None, prefix=None):
     pool.build(proto="socks5", max_test=5000, workers=400)
     pool.build(proto="http", max_test=3000, workers=400)
     
+    if stats:
+        stats.update(proxies_alive=pool.size())
+
     if pool.size() < 5:
         print("[!] Premalo radnih proksija.")
         return
@@ -153,13 +160,13 @@ def main(threads=None, amount=None, prefix=None):
         ("Bing", bing),
         ("Google", google)
     ]
-    lock, stats = threading.Lock(), {"total": 0, "sqli": 0, "leaks": 0}
+    lock, internal_stats = threading.Lock(), {"total": 0, "sqli": 0, "leaks": 0}
     consecutive_failures = 0
 
     print(f"\n[!] Skeniranje pocinje sa {pool.size()} proksija...\n")
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = [executor.submit(worker, d, amount, out_all, out_sqli, out_leak, pool, engines, lock, stats) for d in all_dorks]
+        futures = [executor.submit(worker, d, amount, out_all, out_sqli, out_leak, pool, engines, lock, internal_stats, stats) for d in all_dorks]
         for i, future in enumerate(as_completed(futures)):
             result_str = future.result()
             print(f"[{i+1:>4}/{len(all_dorks)}] {result_str}")
@@ -176,13 +183,15 @@ def main(threads=None, amount=None, prefix=None):
                 # Agresivniji refetch
                 pool.build(proto="socks5", max_test=5000, workers=400)
                 pool.build(proto="http", max_test=4000, workers=400)
+                if stats:
+                    stats.update(proxies_alive=pool.size())
                 consecutive_failures = 0
                 print(f"\n[!] Novi pool spreman: {pool.size()} proksija. Nastavljam...\n")
 
             if i % threads == 0:
                 time.sleep(0.3)
 
-    print(f"\n[!] Gotovo! SQLi: {stats['sqli']} | Leaks: {stats['leaks']}")
+    print(f"\n[!] Gotovo! SQLi: {internal_stats['sqli']} | Leaks: {internal_stats['leaks']}")
 
 if __name__ == "__main__":
     main()

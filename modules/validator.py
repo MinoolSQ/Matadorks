@@ -7,7 +7,7 @@ import sys
 from core.config import DOMAIN_BLACKLIST, VALIDATED_FILE, VALIDATOR_THREADS, VALIDATOR_TIMEOUT
 
 class Validator:
-    def __init__(self, input_file, output_file, threads):
+    def __init__(self, input_file, output_file, threads, stats=None):
         self.input_file = input_file
         self.output_file = output_file
         self.threads = threads
@@ -17,6 +17,7 @@ class Validator:
         self.lock = threading.Lock()
         self.total_processed = 0
         self.total_links = 0
+        self.stats = stats
 
     def is_blacklisted(self, url):
         """Checks if the URL contains any blacklisted keywords or domains."""
@@ -43,6 +44,8 @@ class Validator:
                     with self.lock:
                         self.valid_urls.append(url)
                         print(f"[+] VALID: {url}")
+                        if self.stats:
+                            self.stats.update(validated=len(self.valid_urls))
                 else:
                     print(f"[-] DEAD ({response.status_code}): {url}")
             except Exception as e:
@@ -97,11 +100,11 @@ class Validator:
         print(f"[#] Total valid links saved: {len(self.valid_urls)}")
         print(f"[#] Output saved to: {self.output_file}")
 
-def main(input_file=None, output_file=None, threads=None):
+def main(input_file=None, output_file=None, threads=None, stats=None):
     input_file = input_file or "data/matadorks_sqli_targets.txt"  # ISPRAVNA PUTANJA
     output_file = output_file or VALIDATED_FILE
     threads = threads or VALIDATOR_THREADS
-    validator = Validator(input_file, output_file, threads)
+    validator = Validator(input_file, output_file, threads, stats=stats)
     validator.run()
 
 if __name__ == "__main__":
