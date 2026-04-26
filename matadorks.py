@@ -34,7 +34,7 @@ class MatadorksApp:
             self.logger.error(f"uv sync failed: {e}")
 
     def show_banner(self):
-        banner = f"""
+        banner = rf"""
 [bold red]
   __  __         _             _             _        
  |  \/  |  __ _ | |_  __ _  __| | ___  _ __ | | __ ___
