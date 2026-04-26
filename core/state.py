@@ -1,7 +1,6 @@
 import json
 import os
-
-STATE_FILE = "data/state.json"
+from core.config import STATE_FILE
 
 class State:
     def __init__(self):
