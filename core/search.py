@@ -406,3 +406,37 @@ def zoomeye(dork, amount, proxy=None):
     except:
         pass
     return results
+
+
+def publicwww(dork, amount, proxy=None):
+    """PublicWWW — pretražuje source code sajtova."""
+    results = []
+    headers = {
+        'User-Agent': get_random_ua(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    }
+    proxies = {'http': proxy, 'https': proxy} if proxy else None
+    try:
+        random_sleep()
+        query = urllib.parse.quote_plus(dork)
+        url = f"https://publicwww.com/websites/{query}/"
+        resp = requests.get(url, headers=headers, proxies=proxies, timeout=15, verify=False)
+        if resp.status_code != 200:
+            return results
+        
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        # Tražimo <a class="site"> ili href linkove ka targetima
+        for a in soup.select('a.site, td > a[target="_blank"]'):
+            href = a.get('href', '')
+            if href.startswith('http') and 'publicwww.com' not in href:
+                results.append(href)
+                if len(results) >= amount:
+                    break
+            elif not href.startswith('http') and '.' in href:
+                # Neki linkovi mogu biti samo domen
+                results.append(f"http://{href.strip('/')}/")
+                if len(results) >= amount:
+                    break
+    except:
+        pass
+    return results
