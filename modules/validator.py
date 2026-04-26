@@ -4,31 +4,14 @@ import threading
 from queue import Queue
 from urllib.parse import urlparse
 import sys
-
-# --- CONFIGURATION ---
-INPUT_FILE = "../ugare_sqli_targets.txt"  # Default input file
-OUTPUT_FILE = "validated_targets.txt"
-THREADS = 20
-TIMEOUT = 10
-
-# List of domains or keywords to ignore (garbage/false positives)
-BLACK_LIST = [
-    "github.com", "stackoverflow.com", "youtube.com", "facebook.com",
-    "twitter.com", "linkedin.com", "wikipedia.org", "amazon.com",
-    "google.com", "bing.com", "microsoft.com", "apple.com",
-    "instagram.com", "reddit.com", "medium.com", "pinterest.com",
-    "quora.com", "adobe.com", "oracle.com", "mysql.com", "laracasts.com",
-    "stackexchange.com", "serverfault.com", "askubuntu.com", "wordpress.org",
-    "forum", "doku.php", "wiki", "community", "support",
-    "documentation", "blog", "news", "tutorial", "how-to", "issue", "bugs",
-    "pastebin.com", "gist.github.com", "bitbucket.org"
-]
+from core.config import DOMAIN_BLACKLIST, VALIDATED_FILE, VALIDATOR_THREADS, VALIDATOR_TIMEOUT
 
 class Validator:
     def __init__(self, input_file, output_file, threads):
         self.input_file = input_file
         self.output_file = output_file
         self.threads = threads
+        self.timeout = VALIDATOR_TIMEOUT
         self.queue = Queue()
         self.valid_urls = []
         self.lock = threading.Lock()
@@ -38,10 +21,7 @@ class Validator:
     def is_blacklisted(self, url):
         """Checks if the URL contains any blacklisted keywords or domains."""
         url_lower = url.lower()
-        for item in BLACK_LIST:
-            if item in url_lower:
-                return True
-        return False
+        return any(item in url_lower for item in DOMAIN_BLACKLIST)
 
     def check_url(self):
         """Worker thread to check URL status."""
@@ -53,11 +33,11 @@ class Validator:
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
                 }
                 # Check status but don't download the whole page
-                response = requests.head(url, headers=headers, timeout=TIMEOUT, allow_redirects=True)
+                response = requests.head(url, headers=headers, timeout=self.timeout, allow_redirects=True)
                 
                 # If HEAD fails or is not allowed, try GET
                 if response.status_code >= 400:
-                    response = requests.get(url, headers=headers, timeout=TIMEOUT, allow_redirects=True, stream=True)
+                    response = requests.get(url, headers=headers, timeout=self.timeout, allow_redirects=True, stream=True)
 
                 if response.status_code == 200:
                     with self.lock:
@@ -117,12 +97,10 @@ class Validator:
         print(f"[#] Total valid links saved: {len(self.valid_urls)}")
         print(f"[#] Output saved to: {self.output_file}")
 
-def main(input_file=None, output_file=None, threads=20):
-    if input_file is None:
-        input_file = "data/matadorks_sqli_targets.txt"
-    if output_file is None:
-        output_file = "data/validated_targets.txt"
-    
+def main(input_file=None, output_file=None, threads=None):
+    input_file = input_file or "data/matadorks_sqli_targets.txt"  # ISPRAVNA PUTANJA
+    output_file = output_file or VALIDATED_FILE
+    threads = threads or VALIDATOR_THREADS
     validator = Validator(input_file, output_file, threads)
     validator.run()
 
