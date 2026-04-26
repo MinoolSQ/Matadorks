@@ -79,141 +79,14 @@ class MatadorksApp:
             self.logger.error(f"uv sync failed: {e}")
 
     def show_banner(self):
-        import random
         from rich.panel import Panel
-        
-        symbols = ["@", "#", "&", "%"]
-        
-        # Handcrafted 9-width block letters for MATADORKS
-        m = [
-            "@#&   @#&",
-            "@##& @##&",
-            "@#@&#@#&@",
-            "@# @@@ #&",
-            "@#  @  #&",
-            "@#     #&",
-            "@#     #&",
-            "@#     #&"
-        ]
-        a = [
-            " @#&@#&@ ",
-            "@#&   @#&",
-            "@#&   @#&",
-            "@#&@#&@#&",
-            "@#&@#&@#&",
-            "@#&   @#&",
-            "@#&   @#&",
-            "@#&   @#&"
-        ]
-        t = [
-            "@#&@#&@#&",
-            "@#&@#&@#&",
-            "  @#&@#  ",
-            "  @#&@#  ",
-            "  @#&@#  ",
-            "  @#&@#  ",
-            "  @#&@#  ",
-            "  @#&@#  "
-        ]
-        d = [
-            "@#&@#&@  ",
-            "@#&   @#&",
-            "@#&    @#",
-            "@#&    @#",
-            "@#&    @#",
-            "@#&    @#",
-            "@#&   @#&",
-            "@#&@#&@  "
-        ]
-        o = [
-            " @#&@#&@ ",
-            "@#&   @#&",
-            "@#&   @#&",
-            "@#&   @#&",
-            "@#&   @#&",
-            "@#&   @#&",
-            "@#&   @#&",
-            " @#&@#&@ "
-        ]
-        r = [
-            "@#&@#&@  ",
-            "@#&   @#&",
-            "@#&   @#&",
-            "@#&@#&@  ",
-            "@#& @#&  ",
-            "@#&  @#& ",
-            "@#&   @#&",
-            "@#&    @#"
-        ]
-        k = [
-            "@#&   @#&",
-            "@#&  @#& ",
-            "@#& @#&  ",
-            "@#&@#&   ",
-            "@#& @#&  ",
-            "@#&  @#& ",
-            "@#&   @#&",
-            "@#&    @#"
-        ]
-        s = [
-            " @#&@#&@ ",
-            "@#&      ",
-            "@#&      ",
-            " @#&@#&@ ",
-            "      @#&",
-            "      @#&",
-            "@#&   @#&",
-            " @#&@#&@ "
-        ]
-
-        letters = [m, a, t, a, d, o, r, k, s]
-        
-        silhouette = [
-            "      .      ",
-            "     / \\     ",
-            "    (&%&)    ",
-            "    #@#@#    ",
-            "  _/%&%&%\\_  ",
-            " / %&%&%&% \\ ",
-            "(&%&%&%&%&%&)",
-            " \\%&%&%&%&%/ ",
-            "  #@#@#@#@#  ",
-            "   /#####\\   ",
-            "   |#| |#|   ",
-            "   |_| |_|   "
-        ]
-
-        # Combine
-        banner_lines = []
-        for i in range(max(len(silhouette), 8)):
-            # Silhouette part
-            s_part = silhouette[i] if i < len(silhouette) else " " * 13
-            # Letters part
-            l_parts = []
-            for l in letters:
-                l_parts.append(l[i] if i < 8 else " " * 9)
-            l_part = " ".join(l_parts)
-            
-            # Add noise to textured parts and background
-            def apply_noise(text, is_bg=False):
-                res = ""
-                for char in text:
-                    if char in "@#&%":
-                        res += random.choice(symbols)
-                    elif char == " " and is_bg and random.random() < 0.05:
-                        res += f"[dim black]{random.choice(symbols)}[/dim black]"
-                    else:
-                        res += char
-                return res
-
-            line = f"[dim red]{apply_noise(s_part)}[/dim red]   [bold red]{apply_noise(l_part, is_bg=True)}[/bold red]"
-            banner_lines.append(line)
-
-        banner_text = "\n".join(banner_lines)
-        banner_text += "\n\n"
-        banner_text += f"[bold white]        M  A  T  A  D  O  R  K  S[/bold white]\n"
-        banner_text += f"[dim]        Unified SQLi Pipeline v{self.version}[/dim]"
-
+        banner_path = os.path.join(os.path.dirname(__file__), "assets", "banner.txt")
+        try:
+            with open(banner_path, "r", encoding="utf-8") as f:
+                banner_text = f.read()
+        except FileNotFoundError:
+            banner_text = "MATADORKS"
+        banner_text += f"\n[dim]Unified SQLi Pipeline v{self.version}[/dim]"
         console.print(Panel(banner_text, border_style="red", padding=(1, 2)))
 
     def build_dashboard(self):
