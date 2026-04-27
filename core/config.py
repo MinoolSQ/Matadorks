@@ -53,6 +53,16 @@ USE_GHAURI_FALLBACK = True
 SQLMAP_EXPLOIT_TIMEOUT = 600
 EXPLOITER_CONCURRENT = 3
 
+# --- Harvester ---
+HARVESTER_CRT_FRESHNESS_DAYS = 90
+HARVESTER_PROBE_PATHS = [
+    "/?id=1", "/index.php?id=1", "/page.php?id=1",
+    "/article.php?id=1", "/product.php?id=1",
+    "/news.php?id=1", "/item.php?cat=1",
+    "/view.php?id=1", "/details.php?id=1",
+]
+HARVESTER_TARGETS_TLD = ["gov.it", "gov.br", "edu.ph", "gov.vn", "gov.ge"]
+
 # --- Unified Domain Blacklist ---
 DOMAIN_BLACKLIST = [
     "youtube.com", "youtu.be", "reddit.com", "quora.com", "stackoverflow.com",
