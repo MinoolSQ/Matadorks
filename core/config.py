@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- Paths ---
 DATA_DIR = "data"
@@ -68,4 +71,12 @@ DOMAIN_BLACKLIST = [
     "serverfault.com", "askubuntu.com", "wordpress.org", "pastebin.com",
     "gist.github.com", "bitbucket.org",
 ]
+
+# --- AWS API Gateway (IP Rotation) ---
+AWS_GATEWAY_GOOGLE = os.getenv("AWS_GATEWAY_GOOGLE", "")
+AWS_GATEWAY_BING = os.getenv("AWS_GATEWAY_BING", "")
+AWS_GATEWAY_BRAVE = os.getenv("AWS_GATEWAY_BRAVE", "")
+AWS_GATEWAY_YANDEX = os.getenv("AWS_GATEWAY_YANDEX", "")
+AWS_GATEWAY_DDG = os.getenv("AWS_GATEWAY_DDG", "")
+USE_AWS_GATEWAY = any([AWS_GATEWAY_GOOGLE, AWS_GATEWAY_BING, AWS_GATEWAY_BRAVE, AWS_GATEWAY_YANDEX, AWS_GATEWAY_DDG])
 
