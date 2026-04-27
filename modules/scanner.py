@@ -40,7 +40,7 @@ def is_sqli_candidate(url):
     except:
         return False
 
-async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_q):
+async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_q, app_state=None):
     proxy = pool.get_random()
     
     # Randomly pick an engine to avoid overusing one
@@ -55,6 +55,11 @@ async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_
         filtered = []
         for r in results:
             if is_blacklisted(r): continue
+            
+            # Perzistentna provera (ako smo ga ikada ranije procesirali)
+            if app_state and app_state.is_processed(r):
+                continue
+
             norm = normalize_url(r)
             if norm not in seen_urls:
                 seen_urls.add(norm)
@@ -78,12 +83,15 @@ async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_
             stats_obj.update(urls_scanned=stats_obj.urls_scanned + len(filtered))
 
         for url in filtered:
+            # Markiraj kao procesiran pre slanja u queue
+            if app_state:
+                app_state.mark_processed(url)
             await out_q.put(url)
 
     except Exception:
         if proxy: pool.mark_dead(proxy)
 
-async def run_worker(in_q, out_q, stats=None, abort=None):
+async def run_worker(in_q, out_q, stats=None, abort=None, app_state=None):
     amount = SCANNER_AMOUNT
     prefix = SCANNER_PREFIX
     out_all, out_sqli = f"data/{prefix}_all.txt", f"data/{prefix}_sqli_targets.txt"
@@ -118,7 +126,7 @@ async def run_worker(in_q, out_q, stats=None, abort=None):
         
         async def bounded_worker(d):
             async with semaphore:
-                await worker(d, amount, out_all, out_sqli, pool, engines, stats, out_q)
+                await worker(d, amount, out_all, out_sqli, pool, engines, stats, out_q, app_state=app_state)
         
         task = asyncio.create_task(bounded_worker(dork))
         tasks.append(task)

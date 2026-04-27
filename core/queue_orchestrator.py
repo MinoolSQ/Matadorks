@@ -66,7 +66,7 @@ class QueueManager:
             
             # Note: worker_func MUST be an async function (coroutine)
             if name == "Scanner":
-                await worker_func(in_q, out_q, stats=app.stats, abort=self._abort_event)
+                await worker_func(in_q, out_q, stats=app.stats, abort=self._abort_event, app_state=app.state)
             elif name == "Validator":
                 await worker_func(in_q, out_q, stats=app.stats, abort=self._abort_event)
             elif name == "Injector":
