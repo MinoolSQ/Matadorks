@@ -1,4 +1,5 @@
 import sys
+import threading
 from rich.console import Console
 from rich.theme import Theme
 
@@ -14,26 +15,44 @@ custom_theme = Theme({
 console = Console(theme=custom_theme)
 
 class Logger:
-    @staticmethod
-    def info(message):
-        console.print(f"[info][*][/info] {message}")
+    _lock = threading.Lock()
+    _quiet_mode = False
 
-    @staticmethod
-    def success(message):
-        console.print(f"[success][+][/success] {message}")
+    @classmethod
+    def set_quiet(cls, quiet: bool):
+        cls._quiet_mode = quiet
 
-    @staticmethod
-    def warning(message):
-        console.print(f"[warning][!][/warning] {message}")
+    @classmethod
+    def _print(cls, prefix_style, prefix_char, message, level="info"):
+        if cls._quiet_mode and level not in ["error", "success", "status"]:
+            return
+        
+        with cls._lock:
+            console.print(f"[{prefix_style}][{prefix_char}][/{prefix_style}] {message}")
 
-    @staticmethod
-    def error(message):
-        console.print(f"[error][x][/error] {message}")
+    @classmethod
+    def info(cls, message):
+        cls._print("info", "*", message, level="info")
 
-    @staticmethod
-    def status(message):
-        console.print(f"[status]>>>[/status] {message}")
+    @classmethod
+    def success(cls, message):
+        cls._print("success", "+", message, level="success")
 
-    @staticmethod
-    def dork(dork_str):
-        console.print(f"[dork]DORK:[/dork] {dork_str}")
+    @classmethod
+    def warning(cls, message):
+        cls._print("warning", "!", message, level="warning")
+
+    @classmethod
+    def error(cls, message):
+        cls._print("error", "x", message, level="error")
+
+    @classmethod
+    def status(cls, message):
+        with cls._lock:
+            console.print(f"[status]>>>[/status] {message}")
+
+    @classmethod
+    def dork(cls, dork_str):
+        if not cls._quiet_mode:
+            with cls._lock:
+                console.print(f"[dork]DORK:[/dork] {dork_str}")

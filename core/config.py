@@ -16,6 +16,8 @@ HTTP_TIMEOUT = 6.0
 TEST_URLS = ["https://httpbin.org/ip", "https://google.com", "https://bing.com"]
 PROXY_MAX_TEST = 5000
 PROXY_WORKERS = 200
+USE_TOR = False # Set to True if you have Tor running on 127.0.0.1:9050
+PRIVATE_PROXIES_FILE = os.path.join(DATA_DIR, "private_proxies.txt")
 
 # --- Scanner ---
 SCANNER_THREADS = 20
@@ -37,6 +39,7 @@ QUEUE_MAX_DORK = 1000
 QUEUE_MAX_URL = 5000
 QUEUE_MAX_VALID = 1000
 QUEUE_MAX_VULN = 500
+ASYNC_CONCURRENCY_LIMIT = 1000
 
 # --- SQLMap (Injector) ---
 SQLMAP_LEVEL = 2
@@ -65,3 +68,4 @@ DOMAIN_BLACKLIST = [
     "serverfault.com", "askubuntu.com", "wordpress.org", "pastebin.com",
     "gist.github.com", "bitbucket.org",
 ]
+

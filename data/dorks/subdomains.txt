@@ -1,0 +1,35 @@
+# Subdomain Attack Patterns
+# Common subdomains for clubs, forums, and dev environments
+inurl:dev.
+inurl:staging.
+inurl:test.
+inurl:api.
+inurl:vpn.
+inurl:git.
+inurl:svn.
+inurl:admin.
+inurl:portal.
+inurl:member.
+inurl:forum.
+inurl:community.
+inurl:board.
+inurl:talk.
+inurl:shop.
+inurl:store.
+inurl:cart.
+inurl:billing.
+inurl:club.
+inurl:vip.
+inurl:old.
+inurl:new.
+inurl:beta.
+inurl:auth.
+inurl:login.
+inurl:internal.
+inurl:private.
+inurl:secret.
+inurl:backup.
+inurl:db.
+inurl:sql.
+inurl:mysql.
+inurl:dashboard.

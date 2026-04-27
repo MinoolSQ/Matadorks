@@ -4,6 +4,34 @@
 "powered by mybb"
 "powered by xenforo"
 "powered by smf"
+"powered by SportMember"
+"Membership software by VeryConnect"
+"GymMaster Member Portal"
+"Website by ClubBuzz"
+"Powered by Chronogolf"
+inurl:"/app/membership/login"
+inurl:"/portal/directory"
+inurl:"/my-club/login"
+inurl:"gggolf.ca/prive"
+inurl:portal "looksmax"
+"looksmaxxing" login
+inurl:community "passport bros"
+inurl:login "geo-maxxing"
+"blackpill" statistics login
+inurl:courses "masculinity"
+intext:"exclusive coaching" login
+inurl:settlement "claim portal"
+intext:"submit your claim" password
+inurl:forum "ecu tuning"
+"CNC machinist" forum login
+inurl:portal "tenant rights"
+intext:"group buy" login "keyboard"
+inurl:login "trucking ELD"
+inurl:portal "load management"
+"offshore rig" crew login
+inurl:login "crewing" maritime
+inurl:portal "private security" veteran
+inurl:members "bridge engineering"
 "motoclub"
 "motorrad"
 "motociclismo"

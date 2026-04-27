@@ -4,3 +4,5 @@ rich
 duckduckgo_search
 PySocks
 urllib3
+aiohttp
+uvloop

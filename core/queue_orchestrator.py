@@ -1,6 +1,5 @@
-import queue
-import threading
-import time
+import asyncio
+import importlib
 from core.logger import Logger
 from core.config import (
     QUEUE_MAX_DORK, QUEUE_MAX_URL, 
@@ -9,29 +8,34 @@ from core.config import (
 
 class QueueManager:
     """
-    Central nervous system for the Matadorks streaming pipeline.
-    Manages queues and worker thread lifecycles.
+    Central nervous system for the Matadorks asynchronous streaming pipeline.
+    Manages async queues and worker task lifecycles.
     """
     def __init__(self, stats=None):
+        self.q_dork = asyncio.Queue(maxsize=QUEUE_MAX_DORK)
+        self.q_url = asyncio.Queue(maxsize=QUEUE_MAX_URL)
+        self.q_valid = asyncio.Queue(maxsize=QUEUE_MAX_VALID)
+        self.q_vuln = asyncio.Queue(maxsize=QUEUE_MAX_VULN)
+        
         self.queues = {
-            'dork_q': queue.Queue(maxsize=QUEUE_MAX_DORK),
-            'url_q': queue.Queue(maxsize=QUEUE_MAX_URL),
-            'valid_q': queue.Queue(maxsize=QUEUE_MAX_VALID),
-            'vuln_q': queue.Queue(maxsize=QUEUE_MAX_VULN)
+            'dork_q': self.q_dork,
+            'url_q': self.q_url,
+            'valid_q': self.q_valid,
+            'vuln_q': self.q_vuln
         }
-        self.workers = []
+        self.tasks = []
         self.logger = Logger()
         self.stats = stats
         self.running = False
-        self._abort_event = threading.Event()
+        self._abort_event = None
 
-    def start_pipeline(self, app_instance):
+    async def start_pipeline(self, app_instance):
         """
-        Spawns worker threads for each pipeline stage.
+        Spawns asynchronous worker tasks for each pipeline stage.
         """
-        self.logger.info("Initializing Pipeline Orchestrator (Streaming Mode)...")
+        self.logger.info("Initializing Async Pipeline Orchestrator...")
         self.running = True
-        self._abort_event = app_instance._abort_phase
+        self._abort_event = app_instance._abort_phase # Assuming this becomes an asyncio.Event or similar
 
         # Stages configuration: (Name, In Queue, Out Queue, Module Name, Function Name)
         stages = [
@@ -45,55 +49,47 @@ class QueueManager:
             in_q = self.queues[in_q_name]
             out_q = self.queues[out_q_name] if out_q_name else None
             
-            thread = threading.Thread(
-                target=self._worker_wrapper,
-                args=(name, mod_name, func_name, in_q, out_q, app_instance),
-                name=f"{name}Worker",
-                daemon=True
+            task = asyncio.create_task(
+                self._worker_wrapper(name, mod_name, func_name, in_q, out_q, app_instance),
+                name=f"{name}Worker"
             )
-            thread.start()
-            self.workers.append(thread)
-            self.logger.info(f"Worker {name} started.")
+            self.tasks.append(task)
+            self.logger.info(f"Worker task {name} started.")
 
-        self.logger.success("All pipeline workers are active and streaming.")
+        self.logger.success("All async pipeline workers are active.")
 
-    def _worker_wrapper(self, name, mod_name, func_name, in_q, out_q, app):
-        """Dynamic importer and executor for workers."""
+    async def _worker_wrapper(self, name, mod_name, func_name, in_q, out_q, app):
+        """Dynamic importer and executor for async workers."""
         try:
-            import importlib
             module = importlib.import_module(mod_name)
             worker_func = getattr(module, func_name)
             
-            # Common interface: func(in_q, out_q, stats, abort)
-            # Some functions might have slightly different signatures, 
-            # we adapt based on what we know from Gemini refactors.
+            # Note: worker_func MUST be an async function (coroutine)
             if name == "Scanner":
-                worker_func(in_q, out_q, stats=app.stats, abort=self._abort_event)
+                await worker_func(in_q, out_q, stats=app.stats, abort=self._abort_event)
             elif name == "Validator":
-                worker_func(in_q, out_q, stats=app.stats, abort=self._abort_event)
+                await worker_func(in_q, out_q, stats=app.stats, abort=self._abort_event)
             elif name == "Injector":
-                worker_func(in_q, out_q, stats=app.stats) # Injector Gemini version
+                await worker_func(in_q, out_q, stats=app.stats)
             elif name == "Exploiter":
-                worker_func(in_q, stats=app.stats) # Exploiter Gemini version (no out_q)
+                await worker_func(in_q, stats=app.stats)
                 
         except Exception as e:
             self.logger.error(f"Worker {name} critical error: {e}")
-            # Propagate None to prevent pipeline hang if a stage dies
             if out_q:
-                out_q.put(None)
+                await out_q.put(None)
 
-    def push_dorks(self, dorks):
+    async def push_dorks(self, dorks):
         """Feeds dorks into the start of the pipeline."""
         for d in dorks:
-            self.queues['dork_q'].put(d)
-        self.queues['dork_q'].put(None) # End of stream
+            await self.queues['dork_q'].put(d)
+        await self.queues['dork_q'].put(None) # End of stream marker
 
-    def wait_for_completion(self):
-        """Wait until all workers finish their tasks."""
-        for t in self.workers:
-            if t.is_alive():
-                t.join()
-        self.logger.success("Pipeline finished processing all items.")
+    async def wait_for_completion(self):
+        """Wait until all worker tasks finish their work."""
+        if self.tasks:
+            await asyncio.gather(*self.tasks, return_exceptions=True)
+        self.logger.success("Async pipeline finished processing all items.")
 
     def get_stats(self):
         """Returns the current size of all managed queues."""
