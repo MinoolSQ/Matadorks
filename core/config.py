@@ -69,3 +69,7 @@ DOMAIN_BLACKLIST = [
     "gist.github.com", "bitbucket.org",
 ]
 
+# --- Time Range Filter ---
+SEARCH_TIME_FILTER = True
+SEARCH_AFTER_YEAR = 2020
+

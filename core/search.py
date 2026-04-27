@@ -4,7 +4,7 @@ import random
 import re
 from bs4 import BeautifulSoup
 import urllib.parse
-from core.config import ASYNC_CONCURRENCY_LIMIT
+from core.config import ASYNC_CONCURRENCY_LIMIT, SEARCH_TIME_FILTER, SEARCH_AFTER_YEAR
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -42,7 +42,8 @@ async def google(dork, amount, proxy=None):
     try:
         async with aiohttp.ClientSession() as session:
             query = urllib.parse.quote_plus(dork)
-            url = f"https://www.google.com/search?q={query}&num={amount}&hl=en&gl=us"
+            tbs_param = f"&tbs=cdr:1,cd_min:1/1/{SEARCH_AFTER_YEAR}" if SEARCH_TIME_FILTER else ""
+            url = f"https://www.google.com/search?q={query}&num={amount}&hl=en&gl=us{tbs_param}"
             async with session.get(url, headers=headers, proxy=proxy, timeout=12) as resp:
                 if resp.status == 200:
                     text = await resp.text()
@@ -63,7 +64,8 @@ async def brave(dork, amount, proxy=None):
     try:
         async with aiohttp.ClientSession() as session:
             query = urllib.parse.quote_plus(dork)
-            url = f"https://search.brave.com/search?q={query}&source=web"
+            fresh_param = f"&tf=y" if SEARCH_TIME_FILTER else ""
+            url = f"https://search.brave.com/search?q={query}&source=web{fresh_param}"
             async with session.get(url, headers=headers, proxy=proxy, timeout=10) as resp:
                 if resp.status == 200:
                     text = await resp.text()
@@ -82,7 +84,8 @@ async def bing(dork, amount, proxy=None):
     try:
         async with aiohttp.ClientSession() as session:
             query = urllib.parse.quote_plus(dork)
-            url = f"https://www.bing.com/search?q={query}&count={amount}"
+            after_param = f"&filters=ex1:%22ez5_{SEARCH_AFTER_YEAR}%22" if SEARCH_TIME_FILTER else ""
+            url = f"https://www.bing.com/search?q={query}&count={amount}{after_param}"
             async with session.get(url, headers=headers, proxy=proxy, timeout=12) as resp:
                 if resp.status == 200:
                     text = await resp.text()
