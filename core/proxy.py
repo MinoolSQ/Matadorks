@@ -7,6 +7,7 @@ import socket
 import re
 import os
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime
 from urllib.parse import urlparse
 from core.config import TCP_TIMEOUT, HTTP_TIMEOUT, TEST_URLS, ASYNC_CONCURRENCY_LIMIT, USE_TOR, PRIVATE_PROXIES_FILE
@@ -240,3 +241,19 @@ def get_google_pool(auto_build=True):
     if auto_build and _pool.size() == 0:
         _pool.build(max_test=1000, min_working=50) # Reduced default for speed
     return _pool
+
+@asynccontextmanager
+async def get_async_session(proxy_url=None, timeout=30):
+    """Helper context manager to provide an aiohttp session with proxy support."""
+    timeout_obj = aiohttp.ClientTimeout(total=timeout)
+    # Note: aiohttp doesn't support socks5 natively without aiohttp-socks.
+    # We use a patched request method to inject the proxy for HTTP/HTTPS.
+    async with aiohttp.ClientSession(timeout=timeout_obj) as session:
+        if proxy_url:
+            orig_request = session._request
+            async def patched_request(method, str_or_url, **kwargs):
+                if 'proxy' not in kwargs and proxy_url.startswith('http'):
+                    kwargs['proxy'] = proxy_url
+                return await orig_request(method, str_or_url, **kwargs)
+            session._request = patched_request
+        yield session
