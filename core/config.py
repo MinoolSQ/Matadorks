@@ -69,3 +69,8 @@ DOMAIN_BLACKLIST = [
     "gist.github.com", "bitbucket.org",
 ]
 
+# --- JA3 TLS Fingerprinting ---
+USE_JA3_MIMICRY = True
+JA3_BROWSER = "chrome120"  # Options: chrome120, chrome110, firefox120, safari17_0
+
+
