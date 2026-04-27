@@ -53,6 +53,13 @@ USE_GHAURI_FALLBACK = True
 SQLMAP_EXPLOIT_TIMEOUT = 600
 EXPLOITER_CONCURRENT = 3
 
+# --- Search Gateways (AWS API Gateway) ---
+AWS_GATEWAY_GOOGLE = os.getenv("AWS_GATEWAY_GOOGLE")
+AWS_GATEWAY_BING = os.getenv("AWS_GATEWAY_BING")
+AWS_GATEWAY_BRAVE = os.getenv("AWS_GATEWAY_BRAVE")
+AWS_GATEWAY_YANDEX = os.getenv("AWS_GATEWAY_YANDEX")
+AWS_GATEWAY_DDG = os.getenv("AWS_GATEWAY_DDG")
+
 # --- Unified Domain Blacklist ---
 DOMAIN_BLACKLIST = [
     "youtube.com", "youtu.be", "reddit.com", "quora.com", "stackoverflow.com",
