@@ -7,6 +7,7 @@ import socket
 import re
 import os
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime
 from urllib.parse import urlparse
 from core.config import TCP_TIMEOUT, HTTP_TIMEOUT, TEST_URLS, ASYNC_CONCURRENCY_LIMIT, USE_TOR, PRIVATE_PROXIES_FILE
@@ -240,3 +241,19 @@ def get_google_pool(auto_build=True):
     if auto_build and _pool.size() == 0:
         _pool.build(max_test=1000, min_working=50) # Reduced default for speed
     return _pool
+
+@asynccontextmanager
+async def get_async_session(proxy=None, timeout=10):
+    """Context manager that returns an aiohttp.ClientSession with optional proxy."""
+    timeout_obj = aiohttp.ClientTimeout(total=timeout)
+    async with aiohttp.ClientSession(timeout=timeout_obj) as session:
+        if proxy:
+            # Note: aiohttp doesn't have a session-level proxy. 
+            # We patch _request to inject the proxy into every call.
+            original_request = session._request
+            async def patched_request(method, str_or_url, **kwargs):
+                if 'proxy' not in kwargs:
+                    kwargs['proxy'] = proxy
+                return await original_request(method, str_or_url, **kwargs)
+            session._request = patched_request
+        yield session
