@@ -206,8 +206,25 @@ class MatadorksApp:
         # Feed dorks
         await self.queue_manager.push_dorks(dorks)
 
+        # Start Harvester in background (runs parallel to scanner)
+        from modules.harvester import HarvesterOrchestrator
+        harvester = HarvesterOrchestrator(
+            url_q=self.queue_manager.q_url,
+            stats=self.stats,
+            abort=self._abort_phase
+        )
+        harvester_task = asyncio.create_task(harvester.run(), name="HarvesterTask")
+
         # Wait for completion
         await self.queue_manager.wait_for_completion()
+        
+        # Ensure harvester finishes too
+        if not harvester_task.done():
+            harvester_task.cancel()
+            try:
+                await harvester_task
+            except asyncio.CancelledError:
+                pass
 
         if not self._quit_requested:
             self.logger.success("Async Pipeline finished!")
