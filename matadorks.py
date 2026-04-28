@@ -281,7 +281,7 @@ class MatadorksApp:
         self.stats.update(proxies_alive=pool.size())
         self.logger.info(f"Proxy pool built with {pool.size()} working proxies.")
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Matadorks Unified Async SQLi Pipeline")
     parser.add_argument("--sync", action="store_true", help="Sync dependencies using uv")
     parser.add_argument("--no-tui", action="store_true", help="Disable Live TUI dashboard")
@@ -296,3 +296,6 @@ if __name__ == "__main__":
             asyncio.run(app.run_pipeline())
         except KeyboardInterrupt:
             pass
+
+if __name__ == "__main__":
+    main()

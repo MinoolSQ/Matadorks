@@ -18,6 +18,18 @@ dependencies = [
     "curl-cffi>=0.7.0",
 ]
 
+[project.scripts]
+matadorks = "matadorks:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["core", "modules", "proxy_sources"]
+py-modules = ["matadorks"]
+
 [tool.uv]
+package = true
 managed = true
 dev-dependencies = []

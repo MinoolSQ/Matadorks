@@ -715,7 +715,7 @@ wheels = [
 [[package]]
 name = "matadorks"
 version = "1.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiohttp-socks" },
