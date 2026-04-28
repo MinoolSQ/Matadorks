@@ -8,7 +8,8 @@ import urllib.parse
 from core.config import (
     ASYNC_CONCURRENCY_LIMIT,
     AWS_GATEWAY_GOOGLE, AWS_GATEWAY_BING,
-    AWS_GATEWAY_BRAVE, AWS_GATEWAY_YANDEX, AWS_GATEWAY_DDG
+    AWS_GATEWAY_BRAVE, AWS_GATEWAY_YANDEX, AWS_GATEWAY_DDG,
+    SEARCH_TIME_FILTER, SEARCH_AFTER_YEAR,
 )
 
 USER_AGENTS = [
@@ -61,7 +62,8 @@ async def google(dork, amount, proxy=None):
         active_proxy = None if AWS_GATEWAY_GOOGLE else proxy
         async with get_async_session(active_proxy, timeout=12) as session:
             query = urllib.parse.quote_plus(dork)
-            url = f"{base}/search?q={query}&num={amount}&hl=en&gl=us"
+            tbs_param = f"&tbs=cdr:1,cd_min:1/1/{SEARCH_AFTER_YEAR}" if SEARCH_TIME_FILTER else ""
+            url = f"{base}/search?q={query}&num={amount}&hl=en&gl=us{tbs_param}"
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
@@ -84,7 +86,8 @@ async def brave(dork, amount, proxy=None):
         active_proxy = None if AWS_GATEWAY_BRAVE else proxy
         async with get_async_session(active_proxy, timeout=10) as session:
             query = urllib.parse.quote_plus(dork)
-            url = f"{base}/search?q={query}&source=web"
+            fresh_param = "&tf=y" if SEARCH_TIME_FILTER else ""
+            url = f"{base}/search?q={query}&source=web{fresh_param}"
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
@@ -105,7 +108,8 @@ async def bing(dork, amount, proxy=None):
         active_proxy = None if AWS_GATEWAY_BING else proxy
         async with get_async_session(active_proxy, timeout=12) as session:
             query = urllib.parse.quote_plus(dork)
-            url = f"{base}/search?q={query}&count={amount}"
+            after_param = f"&filters=ex1:%22ez5_{SEARCH_AFTER_YEAR}%22" if SEARCH_TIME_FILTER else ""
+            url = f"{base}/search?q={query}&count={amount}{after_param}"
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
