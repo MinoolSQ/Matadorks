@@ -104,4 +104,3 @@ HARVESTER_PROBE_PATHS = [
     "/news.php?id=1", "/item.php?cat=1",
     "/view.php?id=1", "/details.php?id=1",
 ]
-
