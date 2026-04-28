@@ -2,10 +2,14 @@ import asyncio
 import aiohttp
 import random
 import re
+import contextlib
 from bs4 import BeautifulSoup
 import urllib.parse
-from core.config import ASYNC_CONCURRENCY_LIMIT
-from core.proxy import get_async_session
+from core.config import (
+    ASYNC_CONCURRENCY_LIMIT,
+    AWS_GATEWAY_GOOGLE, AWS_GATEWAY_BING,
+    AWS_GATEWAY_BRAVE, AWS_GATEWAY_YANDEX, AWS_GATEWAY_DDG
+)
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -18,11 +22,26 @@ USER_AGENTS = [
 def get_random_ua():
     return random.choice(USER_AGENTS)
 
+@contextlib.asynccontextmanager
+async def get_async_session(proxy=None, timeout=10):
+    """Helper to provide an aiohttp session with optional proxy and timeout."""
+    timeout_obj = aiohttp.ClientTimeout(total=timeout)
+    async with aiohttp.ClientSession(timeout=timeout_obj) as session:
+        # Wrap the session.get to automatically include the proxy if provided
+        original_get = session.get
+        def proxied_get(url, **kwargs):
+            if proxy and 'proxy' not in kwargs:
+                kwargs['proxy'] = proxy
+            return original_get(url, **kwargs)
+        session.get = proxied_get
+        yield session
+
 async def duckduckgo(dork, amount, proxy=None):
     results = []
     try:
         from duckduckgo_search import AsyncDDGS
-        async with AsyncDDGS(proxy=proxy, timeout=10) as ddgs:
+        active_proxy = AWS_GATEWAY_DDG if AWS_GATEWAY_DDG else proxy
+        async with AsyncDDGS(proxy=active_proxy, timeout=10) as ddgs:
             async for r in ddgs.text(dork, max_results=amount):
                 href = r.get('href') or r.get('url', '')
                 if href:
@@ -38,9 +57,11 @@ async def google(dork, amount, proxy=None):
         'Accept-Language': 'en-US,en;q=0.9',
     }
     try:
-        async with get_async_session(proxy, timeout=12) as session:
+        base = AWS_GATEWAY_GOOGLE if AWS_GATEWAY_GOOGLE else "https://www.google.com"
+        active_proxy = None if AWS_GATEWAY_GOOGLE else proxy
+        async with get_async_session(active_proxy, timeout=12) as session:
             query = urllib.parse.quote_plus(dork)
-            url = f"https://www.google.com/search?q={query}&num={amount}&hl=en&gl=us"
+            url = f"{base}/search?q={query}&num={amount}&hl=en&gl=us"
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
@@ -59,9 +80,11 @@ async def brave(dork, amount, proxy=None):
     results = []
     headers = {'User-Agent': get_random_ua()}
     try:
-        async with get_async_session(proxy, timeout=10) as session:
+        base = AWS_GATEWAY_BRAVE if AWS_GATEWAY_BRAVE else "https://search.brave.com"
+        active_proxy = None if AWS_GATEWAY_BRAVE else proxy
+        async with get_async_session(active_proxy, timeout=10) as session:
             query = urllib.parse.quote_plus(dork)
-            url = f"https://search.brave.com/search?q={query}&source=web"
+            url = f"{base}/search?q={query}&source=web"
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
@@ -78,9 +101,11 @@ async def bing(dork, amount, proxy=None):
     results = []
     headers = {'User-Agent': get_random_ua()}
     try:
-        async with get_async_session(proxy, timeout=12) as session:
+        base = AWS_GATEWAY_BING if AWS_GATEWAY_BING else "https://www.bing.com"
+        active_proxy = None if AWS_GATEWAY_BING else proxy
+        async with get_async_session(active_proxy, timeout=12) as session:
             query = urllib.parse.quote_plus(dork)
-            url = f"https://www.bing.com/search?q={query}&count={amount}"
+            url = f"{base}/search?q={query}&count={amount}"
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
@@ -91,6 +116,27 @@ async def bing(dork, amount, proxy=None):
                             href = a.get('href', '')
                             if href.startswith('http') and 'bing.com' not in href:
                                 results.append(href)
+    except Exception:
+        pass
+    return results
+
+async def yandex(dork, amount, proxy=None):
+    results = []
+    headers = {'User-Agent': get_random_ua()}
+    try:
+        base = AWS_GATEWAY_YANDEX if AWS_GATEWAY_YANDEX else "https://yandex.com"
+        active_proxy = None if AWS_GATEWAY_YANDEX else proxy
+        async with get_async_session(active_proxy, timeout=12) as session:
+            query = urllib.parse.quote_plus(dork)
+            url = f"{base}/search/xml?query={query}&results={amount}"
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    soup = BeautifulSoup(text, 'html.parser')
+                    for a in soup.select('a[href]'):
+                        href = a.get('href', '')
+                        if href.startswith('http') and 'yandex.' not in href:
+                            results.append(href)
     except Exception:
         pass
     return results
