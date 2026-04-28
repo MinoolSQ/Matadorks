@@ -59,6 +59,13 @@ EXPLOITER_CONCURRENT = 3
 # --- Harvester ---
 HARVESTER_TARGETS_TLD = ["de", "cz", "pl", "hu", "ro", "sk", "bg", "at", "ch"]
 HARVESTER_WAYBACK_LIMIT = 5000
+HARVESTER_CRT_FRESHNESS_DAYS = 90
+HARVESTER_PROBE_PATHS = [
+    "/?id=1", "/index.php?id=1", "/page.php?id=1",
+    "/article.php?id=1", "/product.php?id=1",
+    "/news.php?id=1", "/item.php?cat=1",
+    "/view.php?id=1", "/details.php?id=1",
+]
 
 # --- Unified Domain Blacklist ---
 DOMAIN_BLACKLIST = [
