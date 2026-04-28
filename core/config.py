@@ -56,6 +56,10 @@ USE_GHAURI_FALLBACK = True
 SQLMAP_EXPLOIT_TIMEOUT = 600
 EXPLOITER_CONCURRENT = 3
 
+# --- Harvester ---
+HARVESTER_TARGETS_TLD = ["de", "cz", "pl", "hu", "ro", "sk", "bg", "at", "ch"]
+HARVESTER_WAYBACK_LIMIT = 5000
+
 # --- Unified Domain Blacklist ---
 DOMAIN_BLACKLIST = [
     "youtube.com", "youtu.be", "reddit.com", "quora.com", "stackoverflow.com",
