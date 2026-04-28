@@ -80,3 +80,17 @@ AWS_GATEWAY_YANDEX = os.getenv("AWS_GATEWAY_YANDEX", "")
 AWS_GATEWAY_DDG = os.getenv("AWS_GATEWAY_DDG", "")
 USE_AWS_GATEWAY = any([AWS_GATEWAY_GOOGLE, AWS_GATEWAY_BING, AWS_GATEWAY_BRAVE, AWS_GATEWAY_YANDEX, AWS_GATEWAY_DDG])
 
+# --- Harvester ---
+USE_HARVESTER = True
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+HARVESTER_TARGETS_TLD = ["de", "cz", "pl", "hu", "ro", "sk", "bg", "at", "ch"]
+HARVESTER_WAYBACK_LIMIT = 5000
+HARVESTER_GITHUB_RATE = 1.0
+HARVESTER_CRT_FRESHNESS_DAYS = 90
+HARVESTER_PROBE_PATHS = [
+    "/?id=1", "/index.php?id=1", "/page.php?id=1",
+    "/article.php?id=1", "/product.php?id=1",
+    "/news.php?id=1", "/item.php?cat=1",
+    "/view.php?id=1", "/details.php?id=1",
+]
+
