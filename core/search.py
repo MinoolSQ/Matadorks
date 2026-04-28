@@ -11,6 +11,7 @@ from core.config import (
     AWS_GATEWAY_BRAVE, AWS_GATEWAY_YANDEX, AWS_GATEWAY_DDG,
     SEARCH_TIME_FILTER, SEARCH_AFTER_YEAR,
 )
+from core.cffi_session import get_cffi_session
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -25,10 +26,8 @@ def get_random_ua():
 
 @contextlib.asynccontextmanager
 async def get_async_session(proxy=None, timeout=10):
-    """Helper to provide an aiohttp session with optional proxy and timeout."""
     timeout_obj = aiohttp.ClientTimeout(total=timeout)
     async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-        # Wrap the session.get to automatically include the proxy if provided
         original_get = session.get
         def proxied_get(url, **kwargs):
             if proxy and 'proxy' not in kwargs:
@@ -60,20 +59,24 @@ async def google(dork, amount, proxy=None):
     try:
         base = AWS_GATEWAY_GOOGLE if AWS_GATEWAY_GOOGLE else "https://www.google.com"
         active_proxy = None if AWS_GATEWAY_GOOGLE else proxy
-        async with get_async_session(active_proxy, timeout=12) as session:
+        async with get_cffi_session(active_proxy, timeout=12) as session:
             query = urllib.parse.quote_plus(dork)
             tbs_param = f"&tbs=cdr:1,cd_min:1/1/{SEARCH_AFTER_YEAR}" if SEARCH_TIME_FILTER else ""
             url = f"{base}/search?q={query}&num={amount}&hl=en&gl=us{tbs_param}"
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
+            resp = await session.get(url, headers=headers)
+            status = getattr(resp, 'status_code', getattr(resp, 'status', None))
+            if status == 200:
+                try:
                     text = await resp.text()
-                    soup = BeautifulSoup(text, 'html.parser')
-                    for a in soup.select('a[href]'):
-                        href = a.get('href', '')
-                        if href.startswith('/url?q='):
-                            real = urllib.parse.unquote(href[7:].split('&')[0])
-                            if real.startswith('http') and 'google.com' not in real:
-                                results.append(real)
+                except TypeError:
+                    text = resp.text
+                soup = BeautifulSoup(text, 'html.parser')
+                for a in soup.select('a[href]'):
+                    href = a.get('href', '')
+                    if href.startswith('/url?q='):
+                        real = urllib.parse.unquote(href[7:].split('&')[0])
+                        if real.startswith('http') and 'google.com' not in real:
+                            results.append(real)
     except Exception:
         pass
     return results
@@ -106,20 +109,24 @@ async def bing(dork, amount, proxy=None):
     try:
         base = AWS_GATEWAY_BING if AWS_GATEWAY_BING else "https://www.bing.com"
         active_proxy = None if AWS_GATEWAY_BING else proxy
-        async with get_async_session(active_proxy, timeout=12) as session:
+        async with get_cffi_session(active_proxy, timeout=12) as session:
             query = urllib.parse.quote_plus(dork)
             after_param = f"&filters=ex1:%22ez5_{SEARCH_AFTER_YEAR}%22" if SEARCH_TIME_FILTER else ""
             url = f"{base}/search?q={query}&count={amount}{after_param}"
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
+            resp = await session.get(url, headers=headers)
+            status = getattr(resp, 'status_code', getattr(resp, 'status', None))
+            if status == 200:
+                try:
                     text = await resp.text()
-                    soup = BeautifulSoup(text, 'html.parser')
-                    for li in soup.select('li.b_algo'):
-                        a = li.find('a')
-                        if a:
-                            href = a.get('href', '')
-                            if href.startswith('http') and 'bing.com' not in href:
-                                results.append(href)
+                except TypeError:
+                    text = resp.text
+                soup = BeautifulSoup(text, 'html.parser')
+                for li in soup.select('li.b_algo'):
+                    a = li.find('a')
+                    if a:
+                        href = a.get('href', '')
+                        if href.startswith('http') and 'bing.com' not in href:
+                            results.append(href)
     except Exception:
         pass
     return results
