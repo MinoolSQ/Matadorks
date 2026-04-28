@@ -1,14 +1,13 @@
 import aiohttp
 import asyncio
 import random
-import time
 import threading
-import socket
 import re
 import os
 import json
 from datetime import datetime
 from urllib.parse import urlparse
+from aiohttp_socks import ProxyConnector
 from core.config import TCP_TIMEOUT, HTTP_TIMEOUT, TEST_URLS, ASYNC_CONCURRENCY_LIMIT, USE_TOR, PRIVATE_PROXIES_FILE
 from core.proxy_sources.github_api import GitHubProxyFetcher, SOURCES as GH_SOURCES
 
@@ -23,7 +22,9 @@ def get_dynamic_sources():
             "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt",
             "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
             "https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies/socks5.txt",
-            "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt"
+            "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt",
+            "https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/socks5.txt",
+            "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks5.txt"
         ],
         "http": [
             f"https://checkerproxy.net/api/archive/{today}",
@@ -33,7 +34,8 @@ def get_dynamic_sources():
             "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
             "https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies/http.txt",
             "https://raw.githubusercontent.com/Zaeem20/proxy-list/master/http.txt",
-            "https://raw.githubusercontent.com/andirhm/free-proxy/main/http.txt"
+            "https://raw.githubusercontent.com/andirhm/free-proxy/main/http.txt",
+            "https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt"
         ],
     }
 
@@ -71,15 +73,10 @@ class ProxyPool:
             self.source_stats[url] = {"success": 0, "total": 0, "score": 0.0}
 
     async def fetch_raw_async(self, proto="socks5"):
-        """Asinhrono povlačenje listi proksija."""
         all_data = []
         sources = get_dynamic_sources()
-        
         async with aiohttp.ClientSession() as session:
-            tasks = []
-            for url in sources.get(proto, []):
-                tasks.append(self._fetch_one_async(session, url))
-            
+            tasks = [self._fetch_one_async(session, url) for url in sources.get(proto, [])]
             results = await asyncio.gather(*tasks)
             for res in results:
                 all_data.extend(res)
@@ -92,23 +89,11 @@ class ProxyPool:
                     if "checkerproxy.net" in url:
                         try:
                             data = await resp.json()
-                            results = []
-                            for entry in data:
-                                proxy = entry.get('addr')
-                                if proxy: results.append((proxy, url))
-                            return results
+                            return [(entry.get('addr'), url) for entry in data if entry.get('addr')]
                         except: pass
-                    
                     text = await resp.text()
-                    lines = [l.strip() for l in text.splitlines() if l.strip() and not l.startswith('#')]
-                    processed = []
-                    for l in lines:
-                        match = re.search(r'(\d+\.\d+\.\d+\.\d+:\d+)', l)
-                        if match:
-                            processed.append((match.group(1), url))
-                        elif ':' in l:
-                            processed.append((l.split()[0], url))
-                    return processed
+                    found = re.findall(r'(\d+\.\d+\.\d+\.\d+:\d+)', text)
+                    return [(p, url) for p in found]
         except: pass
         return []
 
@@ -120,94 +105,73 @@ class ProxyPool:
             writer.close()
             await writer.wait_closed()
             return True
-        except:
-            return False
+        except: return False
 
-    async def _test_http_async(self, session, ip_port, proto, source_url):
+    async def _test_http_async(self, ip_port, proto, source_url):
         proxy_url = f"{proto}://{ip_port}"
-        # Note: aiohttp session needs to be configured for proxy if using socks5
-        # actually aiohttp supports socks5 via aiohttp-socks
-        # For simplicity, if proto is socks5, we might need a different session or connector
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         try:
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-            # This is a simplified check. In real scenario, socks5 proxy requires special handling in aiohttp
-            # For now, let's assume we use a session that can handle proxies or we use it for http only
-            async with session.get(TEST_URLS[0], headers=headers, proxy=proxy_url, timeout=HTTP_TIMEOUT, allow_redirects=True) as resp:
-                if resp.status == 200: return proxy_url
+            if proto.startswith("socks"):
+                connector = ProxyConnector.from_url(proxy_url)
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.get(TEST_URLS[0], headers=headers, timeout=HTTP_TIMEOUT) as resp:
+                        if resp.status == 200: return proxy_url
+            else:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(TEST_URLS[0], headers=headers, proxy=proxy_url, timeout=HTTP_TIMEOUT) as resp:
+                        if resp.status == 200: return proxy_url
         except: pass
         return None
 
-    async def build_async(self, proto="socks5", max_test=10000, min_working=100, workers=100, verbose=True, abort=None):
-        if verbose: print(f"\n[proxy] Započinjem masovni fetch (Limit: {max_test})...")
+    async def build_async(self, proto="socks5", max_test=10000, workers=100, verbose=True, abort=None):
+        if verbose: print(f"\n[proxy] Započinjem masovni fetch ({proto})...")
         
         passed_tcp = []
-        # Deduplikacija
-        raw_data = await self.fetch_raw_async(proto)
-        unique_map = {}
-        for p, src in raw_data:
-            if p not in unique_map: unique_map[p] = src
-        
-        candidates = list(unique_map.items())[:max_test]
-        if verbose: print(f"[proxy] Preuzeto {len(raw_data)} | Unikatno {len(unique_map)} | Testiram {len(candidates)}")
+        if proto == "http":
+            gh_fetcher = GitHubProxyFetcher()
+            gh_passed = await gh_fetcher.run_async()
+            passed_tcp.extend(gh_passed)
 
-        if verbose: print(f"[proxy] Faza 1: TCP Port Knocking...")
+        raw_data = await self.fetch_raw_async(proto)
+        unique_map = {p: src for p, src in raw_data}
+        candidates = list(unique_map.items())[:max_test]
         
-        async def check_batch_tcp(batch):
-            tasks = []
-            for p, src in batch:
+        if verbose: print(f"[proxy] Testiram {len(candidates)} TCP konekcija...")
+        
+        sem = asyncio.Semaphore(500)
+        async def check_tcp(p, src):
+            async with sem:
+                if abort and abort.is_set(): return
                 try:
                     host, port = p.split(':')
-                    tasks.append(self._async_tcp_ping(host, int(port)))
-                except: tasks.append(asyncio.sleep(0, result=False))
-            
-            results = await asyncio.gather(*tasks)
-            for (p, src), is_up in zip(batch, results):
-                if is_up: passed_tcp.append((p, src))
+                    if await self._async_tcp_ping(host, int(port)):
+                        passed_tcp.append((p, src))
+                except: pass
 
-        for i in range(0, len(candidates), 1000):
-            if abort and (isinstance(abort, asyncio.Event) and abort.is_set() or hasattr(abort, 'is_set') and abort.is_set()):
-                break
-            await check_batch_tcp(candidates[i:i+1000])
-            if verbose: print(f"[proxy] TCP Alive: {len(passed_tcp)}", end='\r')
-
-        if verbose: print(f"\n[proxy] Faza 2: HTTP Validation...")
-
-        working = []
-        # aiohttp socks support usually requires aiohttp-socks
-        # For validation, we might still use a ThreadPool for SOCKS5 if aiohttp-socks is not available
-        # But let's try to stick to async as much as possible.
+        await asyncio.gather(*[check_tcp(p, src) for p, src in candidates])
         
-        async with aiohttp.ClientSession() as session:
-            # Note: aiohttp doesn't support socks5 natively without aiohttp-socks
-            # If we don't have it, we might fall back to sync tests for socks5
-            tasks = []
-            semaphore = asyncio.Semaphore(workers)
-            
-            async def bounded_test(p, proto, src):
-                async with semaphore:
-                    res = await self._test_http_async(session, p, proto, src)
-                    with self._lock:
-                        self.source_stats[src]["total"] += 1
-                        if res:
-                            self.source_stats[src]["success"] += 1
-                            working.append(res)
-                            if verbose: print(f"[proxy] + {res} ({len(working)} radnih)", end='\r')
-                        s = self.source_stats[src]
-                        s["score"] = (s["success"] / s["total"] * 100) if s["total"] > 0 else 0
+        if verbose: print(f"[proxy] TCP Alive: {len(passed_tcp)}. Validacija HTTP...")
+        
+        working = []
+        sem_http = asyncio.Semaphore(workers)
+        async def check_http(p, src):
+            async with sem_http:
+                if abort and abort.is_set(): return
+                res = await self._test_http_async(p, proto, src)
+                with self._lock:
+                    self.source_stats[src]["total"] += 1
+                    if res:
+                        self.source_stats[src]["success"] += 1
+                        working.append(res)
+                        if verbose: print(f"[proxy] + {res} ({len(working)} radnih)", end='\r')
+                    s = self.source_stats[src]
+                    s["score"] = (s["success"] / s["total"] * 100) if s["total"] > 0 else 0
 
-            for p, src in passed_tcp:
-                tasks.append(asyncio.create_task(bounded_test(p, proto, src)))
-            
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*[check_http(p, src) for p, src in passed_tcp])
         
         with self._lock:
-            self._working = working
-            self._index = 0
-        
-        if verbose:
-            print(f"\n[proxy] Završeno! Radnih: {len(working)}")
-            self.print_source_report()
+            self._working.extend(working)
+            self._working = list(set(self._working))
         return len(working)
 
     def print_source_report(self):
@@ -221,9 +185,6 @@ class ProxyPool:
                 print(f"{domain:<35} | {s['score']:>5.1f}% | {s['success']}/{s['total']}")
         print("-"*50 + "\n")
 
-    def build(self, *args, **kwargs):
-        return asyncio.run(self.build_async(*args, **kwargs))
-
     def get_random(self):
         with self._lock:
             return random.choice(self._working) if self._working else None
@@ -235,8 +196,13 @@ class ProxyPool:
     def size(self):
         return len(self._working)
 
+def get_async_session(proxy_url=None, timeout=10):
+    connector = None
+    if proxy_url and proxy_url.startswith(("socks", "http")):
+        connector = ProxyConnector.from_url(proxy_url)
+    timeout_obj = aiohttp.ClientTimeout(total=timeout)
+    return aiohttp.ClientSession(connector=connector, timeout=timeout_obj)
+
 _pool = ProxyPool()
-def get_google_pool(auto_build=True):
-    if auto_build and _pool.size() == 0:
-        _pool.build(max_test=1000, min_working=50) # Reduced default for speed
+def get_google_pool(auto_build=False):
     return _pool

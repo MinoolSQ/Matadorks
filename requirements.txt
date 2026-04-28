@@ -6,3 +6,4 @@ PySocks
 urllib3
 aiohttp
 uvloop
+aiohttp-socks>=0.8.0

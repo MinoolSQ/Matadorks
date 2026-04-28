@@ -5,6 +5,7 @@ import re
 from bs4 import BeautifulSoup
 import urllib.parse
 from core.config import ASYNC_CONCURRENCY_LIMIT
+from core.proxy import get_async_session
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -19,7 +20,6 @@ def get_random_ua():
 
 async def duckduckgo(dork, amount, proxy=None):
     results = []
-    # Note: duckduckgo_search has AsyncDDGS
     try:
         from duckduckgo_search import AsyncDDGS
         async with AsyncDDGS(proxy=proxy, timeout=10) as ddgs:
@@ -32,18 +32,16 @@ async def duckduckgo(dork, amount, proxy=None):
     return results
 
 async def google(dork, amount, proxy=None):
-    # Google is hard to do asinhrono without a browser or specialized API
-    # For now we'll use aiohttp and hope for the best with proxies
     results = []
     headers = {
         'User-Agent': get_random_ua(),
         'Accept-Language': 'en-US,en;q=0.9',
     }
     try:
-        async with aiohttp.ClientSession() as session:
+        async with get_async_session(proxy, timeout=12) as session:
             query = urllib.parse.quote_plus(dork)
             url = f"https://www.google.com/search?q={query}&num={amount}&hl=en&gl=us"
-            async with session.get(url, headers=headers, proxy=proxy, timeout=12) as resp:
+            async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
                     soup = BeautifulSoup(text, 'html.parser')
@@ -61,10 +59,10 @@ async def brave(dork, amount, proxy=None):
     results = []
     headers = {'User-Agent': get_random_ua()}
     try:
-        async with aiohttp.ClientSession() as session:
+        async with get_async_session(proxy, timeout=10) as session:
             query = urllib.parse.quote_plus(dork)
             url = f"https://search.brave.com/search?q={query}&source=web"
-            async with session.get(url, headers=headers, proxy=proxy, timeout=10) as resp:
+            async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
                     soup = BeautifulSoup(text, 'html.parser')
@@ -80,10 +78,10 @@ async def bing(dork, amount, proxy=None):
     results = []
     headers = {'User-Agent': get_random_ua()}
     try:
-        async with aiohttp.ClientSession() as session:
+        async with get_async_session(proxy, timeout=12) as session:
             query = urllib.parse.quote_plus(dork)
             url = f"https://www.bing.com/search?q={query}&count={amount}"
-            async with session.get(url, headers=headers, proxy=proxy, timeout=12) as resp:
+            async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
                     soup = BeautifulSoup(text, 'html.parser')
@@ -101,10 +99,10 @@ async def publicwww(dork, amount, proxy=None):
     results = []
     headers = {'User-Agent': get_random_ua()}
     try:
-        async with aiohttp.ClientSession() as session:
+        async with get_async_session(proxy, timeout=15) as session:
             query = urllib.parse.quote_plus(dork)
             url = f"https://publicwww.com/websites/{query}/"
-            async with session.get(url, headers=headers, proxy=proxy, timeout=15) as resp:
+            async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     text = await resp.text()
                     soup = BeautifulSoup(text, 'html.parser')
