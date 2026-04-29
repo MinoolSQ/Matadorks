@@ -14,6 +14,7 @@ from core.config import (
     DOMAIN_BLACKLIST, SCANNER_THREADS, SCANNER_AMOUNT,
     SCANNER_PREFIX, ASYNC_CONCURRENCY_LIMIT, DORKS_FILE
 )
+from modules.ghdb_provider import GHDBProvider
 
 seen_urls = set()
 seen_lock = threading.Lock() # Still use lock for set deduplication if needed, though async is single-threaded
@@ -40,7 +41,7 @@ def is_sqli_candidate(url):
     except:
         return False
 
-async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_q, app_state=None):
+async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_q, app_state=None, dork_map=None):
     proxy = pool.get_random()
 
     # Randomly pick an engine to avoid overusing one
@@ -85,11 +86,18 @@ async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_
         if stats_obj:
             stats_obj.update(urls_scanned=stats_obj.urls_scanned + len(filtered))
 
+        edb_id = dork_map.get(dork) if dork_map else None
+
         for url in filtered:
             # Markiraj kao procesiran pre slanja u queue
             if app_state:
                 app_state.mark_processed(url)
-            await out_q.put(url)
+            
+            url_obj = {"url": url, "dork": dork}
+            if edb_id:
+                url_obj["edb_id"] = edb_id
+            
+            await out_q.put(url_obj)
 
     except Exception as e:
         print(f"[!] Worker exception for {name}: {e}")
@@ -115,6 +123,9 @@ async def run_worker(in_q, out_q, stats=None, abort=None, app_state=None):
 
     semaphore = asyncio.Semaphore(ASYNC_CONCURRENCY_LIMIT)
     tasks = []
+    
+    provider = GHDBProvider()
+    dork_map = provider.get_dork_map()
 
     while True:
         if abort and abort.is_set():
@@ -123,12 +134,13 @@ async def run_worker(in_q, out_q, stats=None, abort=None, app_state=None):
         dork = await in_q.get()
         if dork is None:
             await asyncio.gather(*tasks, return_exceptions=True)
+            await out_q.put(None)
             in_q.task_done()
             break
         
         async def bounded_worker(d):
             async with semaphore:
-                await worker(d, amount, out_all, out_sqli, pool, engines, stats, out_q, app_state=app_state)
+                await worker(d, amount, out_all, out_sqli, pool, engines, stats, out_q, app_state=app_state, dork_map=dork_map)
         
         task = asyncio.create_task(bounded_worker(dork))
         tasks.append(task)

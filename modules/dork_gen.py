@@ -1,5 +1,10 @@
 import os
 import random
+import sys
+
+# Add project root to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from core.config import DORKS_DATA_DIR, SEARCH_TIME_FILTER, SEARCH_AFTER_YEAR
 
 def _load_list(filename):
@@ -113,16 +118,35 @@ def generate_taxonomy_dorks():
 
     return dorks
 
+def generate_ghdb_dorks():
+    """Vulnerabilities from GHDB (Exploit-DB)."""
+    try:
+        from modules.ghdb_provider import GHDBProvider
+        provider = GHDBProvider()
+        # Fokusiramo se na najrelevantnije kategorije za SQLi i WebApps
+        categories = [
+            "Advisories and Vulnerabilities",
+            "Vulnerable Files",
+            "Vulnerable Servers"
+        ]
+        return provider.get_dorks(categories=categories)
+    except Exception:
+        return []
+
 def generate_all():
     """Generiše isključivo High-Confidence dorkove (CS > 60)."""
     modern_leaks = _load_list("modern_leaks.txt")
     cve_dorks = generate_cve_dorks()
     taxonomy_dorks = generate_taxonomy_dorks()
+    ghdb_dorks = generate_ghdb_dorks()
+    bullseye_dorks = _load_list("bullseye_dorks.txt")
     
     all_dorks = set()
     all_dorks.update(modern_leaks)
     all_dorks.update(cve_dorks)
     all_dorks.update(taxonomy_dorks)
+    all_dorks.update(ghdb_dorks)
+    all_dorks.update(bullseye_dorks)
     
     # Zadržavamo samo NIŠNE SQL dorkove (povećava preciznost)
     all_dorks.update(generate_niche_sqli_dorks())

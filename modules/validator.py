@@ -41,13 +41,14 @@ class Validator:
             except:
                 return False
 
-    async def process_url(self, session, url):
-        if not self.is_blacklisted(url):
-            if await self.validate_url(session, url):
+    async def process_url(self, session, item):
+        url_str = item["url"] if isinstance(item, dict) else item
+        if not self.is_blacklisted(url_str):
+            if await self.validate_url(session, url_str):
                 with self.lock:
                     with open(self.output_file, "a") as f:
-                        f.write(url + "\n")
-                    self.out_q.put_nowait(url)
+                        f.write(url_str + "\n")
+                    self.out_q.put_nowait(item)
                     if self.stats:
                         self.stats.update(validated=self.stats.validated + 1)
 
@@ -60,11 +61,11 @@ class Validator:
                 if self.abort and self.abort.is_set():
                     break
                 try:
-                    url = await self.in_q.get()
+                    item = await self.in_q.get()
                 except:
                     continue
                 
-                if url is None:
+                if item is None:
                     if tasks:
                         await asyncio.gather(*tasks, return_exceptions=True)
                     self.out_q.put_nowait(None)
@@ -74,7 +75,7 @@ class Validator:
                     async with semaphore:
                         await self.process_url(session, u)
                 
-                task = asyncio.create_task(bounded_process(url))
+                task = asyncio.create_task(bounded_process(item))
                 tasks.append(task)
                 
                 # Clean up finished tasks to prevent memory growth

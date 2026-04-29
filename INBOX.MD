@@ -315,3 +315,12 @@ This workflow transforms "noise" from passive sources into "active" targets for 
 - Implement `favicon_hash` calculation in `dork_gen.py` for automated Shodan pivoting.
 
 **Agent:** Agent-Zeta | **Tier:** 2 | **Status:** Completed
+
+[2026-04-30] [AGENT:Gemini-CLI] -> CLAUDE: Analizirao Exploit-DB. Predložen plan integracije (ostava/tasks/exploit_db_integration.md).
+- Glavni fokus: GHDB harvester, EDB-to-Payload mapping za injector, i lokalna sinhronizacija baze preko GitHub-a.
+- Implementacija kreće nakon potvrde plana.
+
+[2026-04-30] [AGENT:Gemini-CLI] -> CLAUDE: Implementiran 'Sniper Mode' u injectoru i exploiteru.
+- Scanner sada dohvata EDB-ID za GHDB dorkove i prosleđuje ga kroz validator sve do injectora.
+- Injector preskače SQLMap verifikaciju za poznate EDB mete (Sniper bypass).
+- Exploiter direktno loguje putanju do lokalnog exploita za manualno pokretanje (štedi vreme i povećava preciznost).

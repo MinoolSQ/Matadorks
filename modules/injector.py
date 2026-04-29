@@ -43,14 +43,18 @@ class AsyncInjector:
         self.vulnerable_count = 0
         self.semaphore = asyncio.Semaphore(SQLMAP_CONCURRENT_SCANS)
 
-    async def scan_target(self, url):
+    async def scan_target(self, target_obj):
+        url = target_obj["url"] if isinstance(target_obj, dict) else target_obj
+        edb_id = target_obj.get("edb_id") if isinstance(target_obj, dict) else None
+
         async with self.semaphore:
             # print(f"[*] Testing: {url}")
             is_vulnerable = False
             dbms = SQLMAP_DBMS or "Unknown"
 
             try:
-                # SQLMap scan
+                # Always perform full SQLMap scan to confirm vulnerability
+                # Even if we have an edb_id, we want to confirm access before counting as 'pwned'
                 process = await asyncio.create_subprocess_exec(
                     "sqlmap", *_build_sqlmap_args(url),
                     stdout=asyncio.subprocess.PIPE,
@@ -71,7 +75,7 @@ class AsyncInjector:
                     except: pass
                     return
 
-                # Ghauri fallback
+                # Ghauri fallback only if SQLMap fails to confirm
                 if not is_vulnerable and USE_GHAURI_FALLBACK:
                     g_process = await asyncio.create_subprocess_exec(
                         "ghauri", *_build_ghauri_args(url),
@@ -95,6 +99,10 @@ class AsyncInjector:
                         self.stats.update(vulnerable=self.vulnerable_count)
                     
                     vuln_data = {"url": url, "dbms": dbms}
+                    if isinstance(target_obj, dict):
+                        vuln_data.update(target_obj)
+                    vuln_data["dbms"] = dbms
+
                     await self.out_q.put(vuln_data)
                     # print(f"[+] VULNERABLE: {url} ({dbms})")
 

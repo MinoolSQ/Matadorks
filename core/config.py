@@ -33,8 +33,8 @@ USE_PUBLICWWW = True
 USE_STARTPAGE = True
 
 # --- Validator ---
-VALIDATOR_THREADS = 10
-VALIDATOR_BATCH_SIZE = 10
+VALIDATOR_THREADS = 14  # Increased from 10 (+40%)
+VALIDATOR_BATCH_SIZE = 14
 VALIDATOR_TIMEOUT = 10
 
 # --- Queues ---
@@ -42,19 +42,19 @@ QUEUE_MAX_DORK = 1000
 QUEUE_MAX_URL = 5000
 QUEUE_MAX_VALID = 1000
 QUEUE_MAX_VULN = 500
-ASYNC_CONCURRENCY_LIMIT = 100
+ASYNC_CONCURRENCY_LIMIT = 140  # Increased from 100 (+40%)
 
 # --- SQLMap (Injector) ---
-SQLMAP_LEVEL = 2
-SQLMAP_RISK = 1
+SQLMAP_LEVEL = 3  # Increased for deeper automation
+SQLMAP_RISK = 2   # Increased for better detection
 SQLMAP_SCAN_TIMEOUT = 300
-SQLMAP_CONCURRENT_SCANS = 3
+SQLMAP_CONCURRENT_SCANS = 4  # Increased from 3 (+40%)
 SQLMAP_DBMS = ""
 USE_GHAURI_FALLBACK = True
 
 # --- Exploiter ---
 SQLMAP_EXPLOIT_TIMEOUT = 600
-EXPLOITER_CONCURRENT = 2
+EXPLOITER_CONCURRENT = 3  # Increased from 2 (+50%)
 
 # --- Harvester ---
 HARVESTER_TARGETS_TLD = ["de", "cz", "pl", "hu", "ro", "sk", "bg", "at", "ch"]
