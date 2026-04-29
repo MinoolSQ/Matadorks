@@ -31,23 +31,26 @@ async def duckduckgo(dork, amount, proxy=None):
     # 1. Try AWS Gateway first if configured
     if AWS_GATEWAY_DDG:
         try:
-            from duckduckgo_search import AsyncDDGS
-            async with AsyncDDGS(proxy=None, timeout=10) as ddgs:
-                async for r in ddgs.text(dork, max_results=amount):
-                    href = r.get('href') or r.get('url', '')
-                    if href: results.append(href)
-                if results: return results
+            from duckduckgo_search import DDGS
+            def _ddg_aws():
+                with DDGS(proxy=None, timeout=10) as ddgs:
+                    return [r.get('href') or r.get('url', '') for r in ddgs.text(dork, max_results=amount)]
+            
+            results = await asyncio.to_thread(_ddg_aws)
+            results = [r for r in results if r]
+            if results: return results
         except Exception:
             pass
 
     # 2. Fallback to free proxy pool (or primary if no AWS)
     try:
-        from duckduckgo_search import AsyncDDGS
-        async with AsyncDDGS(proxy=proxy, timeout=12) as ddgs:
-            async for r in ddgs.text(dork, max_results=amount):
-                href = r.get('href') or r.get('url', '')
-                if href:
-                    results.append(href)
+        from duckduckgo_search import DDGS
+        def _ddg_local():
+            with DDGS(proxy=proxy, timeout=12) as ddgs:
+                return [r.get('href') or r.get('url', '') for r in ddgs.text(dork, max_results=amount)]
+        
+        results = await asyncio.to_thread(_ddg_local)
+        results = [r for r in results if r]
     except Exception:
         pass
     return results

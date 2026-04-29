@@ -52,6 +52,9 @@ class Validator:
                         self.stats.update(validated=self.stats.validated + 1)
 
     async def run(self):
+        semaphore = asyncio.Semaphore(self.threads)
+        tasks = []
+
         async with get_async_session() as session:
             while True:
                 if self.abort and self.abort.is_set():
@@ -60,10 +63,24 @@ class Validator:
                     url = await self.in_q.get()
                 except:
                     continue
+                
                 if url is None:
+                    if tasks:
+                        await asyncio.gather(*tasks, return_exceptions=True)
                     self.out_q.put_nowait(None)
                     break
-                await self.process_url(session, url)
+
+                async def bounded_process(u):
+                    async with semaphore:
+                        await self.process_url(session, u)
+                
+                task = asyncio.create_task(bounded_process(url))
+                tasks.append(task)
+                
+                # Clean up finished tasks to prevent memory growth
+                if len(tasks) > 100:
+                    tasks = [t for t in tasks if not t.done()]
+                
                 self.in_q.task_done()
 
 async def main(in_q, out_q, stats=None, abort=None):

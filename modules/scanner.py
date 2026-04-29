@@ -42,16 +42,19 @@ def is_sqli_candidate(url):
 
 async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_q, app_state=None):
     proxy = pool.get_random()
-    
+
     # Randomly pick an engine to avoid overusing one
     name, engine_func = random.choice(engines)
-    
+
     try:
         results = await engine_func(dork, amount, proxy=proxy)
         if not results:
+            print(f"[-] {name} returned no results for {dork} (proxy: {proxy})")
             if proxy: pool.mark_dead(proxy)
             return
-        
+
+        print(f"[+] {name} returned {len(results)} results")
+
         filtered = []
         for r in results:
             if is_blacklisted(r): continue
@@ -88,7 +91,8 @@ async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_
                 app_state.mark_processed(url)
             await out_q.put(url)
 
-    except Exception:
+    except Exception as e:
+        print(f"[!] Worker exception for {name}: {e}")
         if proxy: pool.mark_dead(proxy)
 
 async def run_worker(in_q, out_q, stats=None, abort=None, app_state=None):
