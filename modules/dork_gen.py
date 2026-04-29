@@ -141,9 +141,6 @@ def generate_all():
     # Ukloni preduge dorkove
     all_dorks = {d for d in all_dorks if len(d) <= 128}
 
-    if SEARCH_TIME_FILTER:
-        all_dorks = {f"{d} after:{SEARCH_AFTER_YEAR}" for d in all_dorks}
-
     return sorted(all_dorks)
 
 def generate_light_dorks():
@@ -184,9 +181,6 @@ def generate_light_dorks():
         for term in terms:
             for niche in niches:
                 dorks.add(f'"{niche}" "{term}" site:.{tld}')
-
-    if SEARCH_TIME_FILTER:
-        dorks = {f"{d} after:{SEARCH_AFTER_YEAR}" for d in dorks}
 
     return sorted(list(dorks))
 

@@ -23,7 +23,7 @@ class QueueManager:
             'valid_q': self.q_valid,
             'vuln_q': self.q_vuln
         }
-        self.tasks = []
+        self.tasks = {}
         self.logger = Logger()
         self.stats = stats
         self.running = False
@@ -53,7 +53,7 @@ class QueueManager:
                 self._worker_wrapper(name, mod_name, func_name, in_q, out_q, app_instance),
                 name=f"{name}Worker"
             )
-            self.tasks.append(task)
+            self.tasks[name] = task
             self.logger.info(f"Worker task {name} started.")
 
         self.logger.success("All async pipeline workers are active.")
@@ -88,7 +88,7 @@ class QueueManager:
     async def wait_for_completion(self):
         """Wait until all worker tasks finish their work."""
         if self.tasks:
-            await asyncio.gather(*self.tasks, return_exceptions=True)
+            await asyncio.gather(*self.tasks.values(), return_exceptions=True)
         self.logger.success("Async pipeline finished processing all items.")
 
     def get_stats(self):

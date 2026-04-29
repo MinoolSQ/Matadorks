@@ -119,8 +119,6 @@ async def run_worker(in_q, out_q, stats=None, abort=None, app_state=None):
         dork = await in_q.get()
         if dork is None:
             await asyncio.gather(*tasks, return_exceptions=True)
-            if out_q:
-                await out_q.put(None)
             in_q.task_done()
             break
         

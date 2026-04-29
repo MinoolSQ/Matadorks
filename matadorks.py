@@ -215,17 +215,17 @@ class MatadorksApp:
         )
         harvester_task = asyncio.create_task(harvester.run(), name="HarvesterTask")
 
-        # Wait for completion
+        # Wait for both Scanner AND Harvester to finish their seeding work
+        self.logger.info("Waiting for Scanner and Harvester to finish seeding...")
+        await asyncio.gather(self.queue_manager.tasks['Scanner'], harvester_task, return_exceptions=True)
+        
+        # Now that both seeding sources are done, we can signal the Validator (and beyond) to finish
+        self.logger.info("Seeding complete. Draining pipeline...")
+        await self.queue_manager.q_url.put(None)
+
+        # Wait for the rest of the pipeline to process remaining items
         await self.queue_manager.wait_for_completion()
         
-        # Ensure harvester finishes too
-        if not harvester_task.done():
-            harvester_task.cancel()
-            try:
-                await harvester_task
-            except asyncio.CancelledError:
-                pass
-
         if not self._quit_requested:
             self.logger.success("Async Pipeline finished!")
             self.git.commit("Matadorks: Completed async pipeline execution.")

@@ -12,6 +12,7 @@ from core.config import (
     SEARCH_TIME_FILTER, SEARCH_AFTER_YEAR,
 )
 from core.cffi_session import get_cffi_session
+from core.proxy import get_async_session
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -23,18 +24,6 @@ USER_AGENTS = [
 
 def get_random_ua():
     return random.choice(USER_AGENTS)
-
-@contextlib.asynccontextmanager
-async def get_async_session(proxy=None, timeout=10):
-    timeout_obj = aiohttp.ClientTimeout(total=timeout)
-    async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-        original_get = session.get
-        def proxied_get(url, **kwargs):
-            if proxy and 'proxy' not in kwargs:
-                kwargs['proxy'] = proxy
-            return original_get(url, **kwargs)
-        session.get = proxied_get
-        yield session
 
 async def duckduckgo(dork, amount, proxy=None):
     results = []
@@ -133,25 +122,33 @@ async def brave(dork, amount, proxy=None):
     # 1. Try AWS Gateway first if configured
     if AWS_GATEWAY_BRAVE:
         try:
-            async with get_async_session(None, timeout=10) as session:
+            async with get_cffi_session(None, timeout=10) as session:
                 url = f"{AWS_GATEWAY_BRAVE}/search?q={query}&source=web{fresh_param}"
-                async with session.get(url, headers=headers) as resp:
-                    if resp.status == 200:
+                resp = await session.get(url, headers=headers)
+                status = getattr(resp, 'status_code', getattr(resp, 'status', None))
+                if status == 200:
+                    try:
                         text = await resp.text()
-                        results = await _parse_brave_results(text)
-                        if results: return results
+                    except TypeError:
+                        text = resp.text
+                    results = await _parse_brave_results(text)
+                    if results: return results
         except Exception:
             pass
 
     # 2. Fallback to free proxy pool (or primary if no AWS)
     results = []
     try:
-        async with get_async_session(proxy, timeout=15) as session:
+        async with get_cffi_session(proxy, timeout=15) as session:
             url = f"https://search.brave.com/search?q={query}&source=web{fresh_param}"
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
+            resp = await session.get(url, headers=headers)
+            status = getattr(resp, 'status_code', getattr(resp, 'status', None))
+            if status == 200:
+                try:
                     text = await resp.text()
-                    results = await _parse_brave_results(text)
+                except TypeError:
+                    text = resp.text
+                results = await _parse_brave_results(text)
     except Exception:
         pass
     return results
@@ -222,25 +219,33 @@ async def yandex(dork, amount, proxy=None):
     # 1. Try AWS Gateway first if configured
     if AWS_GATEWAY_YANDEX:
         try:
-            async with get_async_session(None, timeout=12) as session:
+            async with get_cffi_session(None, timeout=12) as session:
                 url = f"{AWS_GATEWAY_YANDEX}/search/xml?query={query}&results={amount}"
-                async with session.get(url, headers=headers) as resp:
-                    if resp.status == 200:
+                resp = await session.get(url, headers=headers)
+                status = getattr(resp, 'status_code', getattr(resp, 'status', None))
+                if status == 200:
+                    try:
                         text = await resp.text()
-                        results = await _parse_yandex_results(text)
-                        if results: return results
+                    except TypeError:
+                        text = resp.text
+                    results = await _parse_yandex_results(text)
+                    if results: return results
         except Exception:
             pass
 
     # 2. Fallback to free proxy pool (or primary if no AWS)
     results = []
     try:
-        async with get_async_session(proxy, timeout=15) as session:
+        async with get_cffi_session(proxy, timeout=15) as session:
             url = f"https://yandex.com/search/xml?query={query}&results={amount}"
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
+            resp = await session.get(url, headers=headers)
+            status = getattr(resp, 'status_code', getattr(resp, 'status', None))
+            if status == 200:
+                try:
                     text = await resp.text()
-                    results = await _parse_yandex_results(text)
+                except TypeError:
+                    text = resp.text
+                results = await _parse_yandex_results(text)
     except Exception:
         pass
     return results
@@ -249,19 +254,23 @@ async def publicwww(dork, amount, proxy=None):
     results = []
     headers = {'User-Agent': get_random_ua()}
     try:
-        async with get_async_session(proxy, timeout=15) as session:
+        async with get_cffi_session(proxy, timeout=15) as session:
             query = urllib.parse.quote_plus(dork)
             url = f"https://publicwww.com/websites/{query}/"
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
+            resp = await session.get(url, headers=headers)
+            status = getattr(resp, 'status_code', getattr(resp, 'status', None))
+            if status == 200:
+                try:
                     text = await resp.text()
-                    soup = BeautifulSoup(text, 'html.parser')
-                    for a in soup.select('a.site, td > a[target="_blank"]'):
-                        href = a.get('href', '')
-                        if href.startswith('http') and 'publicwww.com' not in href:
-                            results.append(href)
-                        elif '.' in href:
-                            results.append(f"http://{href.strip('/')}/")
+                except TypeError:
+                    text = resp.text
+                soup = BeautifulSoup(text, 'html.parser')
+                for a in soup.select('a.site, td > a[target="_blank"]'):
+                    href = a.get('href', '')
+                    if href.startswith('http') and 'publicwww.com' not in href:
+                        results.append(href)
+                    elif '.' in href:
+                        results.append(f"http://{href.strip('/')}/")
     except Exception:
         pass
     return results

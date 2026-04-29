@@ -1,5 +1,6 @@
 import aiohttp
 import asyncio
+from contextlib import asynccontextmanager
 import random
 import threading
 import re
@@ -196,12 +197,16 @@ class ProxyPool:
     def size(self):
         return len(self._working)
 
-def get_async_session(proxy_url=None, timeout=10):
+@asynccontextmanager
+async def get_async_session(proxy_url=None, timeout=10):
     connector = None
     if proxy_url and proxy_url.startswith(("socks", "http")):
+        from aiohttp_socks import ProxyConnector
         connector = ProxyConnector.from_url(proxy_url)
+    
     timeout_obj = aiohttp.ClientTimeout(total=timeout)
-    return aiohttp.ClientSession(connector=connector, timeout=timeout_obj)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout_obj) as session:
+        yield session
 
 _pool = ProxyPool()
 def get_google_pool(auto_build=False):
