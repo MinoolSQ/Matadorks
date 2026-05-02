@@ -42,25 +42,40 @@ def is_sqli_candidate(url):
         return False
 
 async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_q, app_state=None, dork_map=None):
-    proxy = pool.get_random()
-
-    # Randomly pick an engine to avoid overusing one
-    name, engine_func = random.choice(engines)
-
+    # Try 2 random engines in parallel for better coverage and speed
+    selected = random.sample(engines, min(len(engines), 2))
+    
+    tasks = []
+    for name, engine_func in selected:
+        proxy = pool.get_random()
+        tasks.append(engine_func(dork, amount, proxy=proxy))
+    
     try:
-        results = await engine_func(dork, amount, proxy=proxy)
-        if not results:
-            print(f"[-] {name} returned no results for {dork} (proxy: {proxy})")
-            if proxy: pool.mark_dead(proxy)
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        all_results = set()
+        for i, results in enumerate(results_list):
+            engine_name = selected[i][0]
+            if isinstance(results, Exception):
+                # print(f"[!] {engine_name} error: {results}")
+                continue
+            
+            if not results:
+                # If engine returned nothing, maybe proxy is dead
+                # but we don't want to be too aggressive in marking dead here
+                continue
+            
+            # print(f"[+] {engine_name} returned {len(results)} results")
+            for r in results:
+                all_results.add(r)
+
+        if not all_results:
             return
 
-        print(f"[+] {name} returned {len(results)} results")
-
         filtered = []
-        for r in results:
+        for r in all_results:
             if is_blacklisted(r): continue
             
-            # Perzistentna provera (ako smo ga ikada ranije procesirali)
             if app_state and app_state.is_processed(r):
                 continue
 
@@ -89,7 +104,6 @@ async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_
         edb_id = dork_map.get(dork) if dork_map else None
 
         for url in filtered:
-            # Markiraj kao procesiran pre slanja u queue
             if app_state:
                 app_state.mark_processed(url)
             
@@ -100,8 +114,7 @@ async def worker(dork, amount, out_all, out_sqli, pool, engines, stats_obj, out_
             await out_q.put(url_obj)
 
     except Exception as e:
-        print(f"[!] Worker exception for {name}: {e}")
-        if proxy: pool.mark_dead(proxy)
+        print(f"[!] Worker overall exception: {e}")
 
 async def run_worker(in_q, out_q, stats=None, abort=None, app_state=None):
     amount = SCANNER_AMOUNT

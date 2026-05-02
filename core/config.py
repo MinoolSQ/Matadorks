@@ -33,16 +33,16 @@ USE_PUBLICWWW = True
 USE_STARTPAGE = True
 
 # --- Validator ---
-VALIDATOR_THREADS = 14  # Increased from 10 (+40%)
-VALIDATOR_BATCH_SIZE = 14
+VALIDATOR_THREADS = 30  # Increased for faster draining
+VALIDATOR_BATCH_SIZE = 30
 VALIDATOR_TIMEOUT = 10
 
 # --- Queues ---
 QUEUE_MAX_DORK = 1000
-QUEUE_MAX_URL = 5000
-QUEUE_MAX_VALID = 1000
-QUEUE_MAX_VULN = 500
-ASYNC_CONCURRENCY_LIMIT = 140  # Increased from 100 (+40%)
+QUEUE_MAX_URL = 10000  # Increased to buffer more URLs
+QUEUE_MAX_VALID = 2000
+QUEUE_MAX_VULN = 1000
+ASYNC_CONCURRENCY_LIMIT = 250  # Increased concurrency for scanning
 
 # --- SQLMap (Injector) ---
 SQLMAP_LEVEL = 3  # Increased for deeper automation

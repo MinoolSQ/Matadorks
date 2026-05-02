@@ -2,6 +2,7 @@ README.md
 matadorks.py
 pyproject.toml
 core/__init__.py
+core/base_service.py
 core/cffi_session.py
 core/config.py
 core/git_handler.py
@@ -20,7 +21,9 @@ matadorks.egg-info/top_level.txt
 modules/__init__.py
 modules/dork_gen.py
 modules/dorker.py
+modules/edb_sync.py
 modules/exploiter.py
+modules/ghdb_provider.py
 modules/harvester.py
 modules/harvester_commoncrawl.py
 modules/harvester_crt.py

@@ -12,7 +12,8 @@ custom_theme = Theme({
     "dork": "blue",
 })
 
-console = Console(theme=custom_theme)
+# Use sys.__stdout__ to ensure logs are visible even if sys.stdout is redirected
+console = Console(theme=custom_theme, file=sys.__stdout__)
 
 class Logger:
     _lock = threading.Lock()
@@ -45,6 +46,14 @@ class Logger:
     @classmethod
     def error(cls, message):
         cls._print("error", "x", message, level="error")
+
+    @classmethod
+    def debug(cls, message):
+        cls._print("info", "D", message, level="info")
+
+    @classmethod
+    def critical(cls, message):
+        cls._print("error", "!!!", message, level="error")
 
     @classmethod
     def status(cls, message):

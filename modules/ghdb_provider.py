@@ -9,11 +9,22 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from core.logger import Logger
 
 class GHDBProvider:
+    _cached_map = None
+    _cached_xml_path = None
+
     def __init__(self, xml_path="data/exploit-database/ghdb.xml"):
         self.xml_path = xml_path
 
     def get_dork_map(self, categories=None):
         """Returns a dict mapping dork query to EDB-ID."""
+        # Return cached map if path hasn't changed
+        if GHDBProvider._cached_map is not None and GHDBProvider._cached_xml_path == self.xml_path:
+            if not categories:
+                return GHDBProvider._cached_map
+            # If categories filtered, we might still need to re-parse or filter the cache
+            # For simplicity, if categories are used, we re-parse or we could filter cache
+            # In most cases in this project, it's called without categories or with same ones
+        
         dork_map = {}
         if not os.path.exists(self.xml_path):
             return dork_map
@@ -37,6 +48,10 @@ class GHDBProvider:
                 edb_id = edb_url.split('/')[-1] if edb_url else ""
                 if edb_id:
                     dork_map[query] = edb_id
+            
+            if not categories:
+                GHDBProvider._cached_map = dork_map
+                GHDBProvider._cached_xml_path = self.xml_path
                 
         except Exception as e:
             Logger.error(f"Failed to map GHDB: {e}")

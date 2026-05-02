@@ -94,7 +94,7 @@ async def google(dork, amount, proxy=None):
     # 2. Fallback to free proxy pool (or primary if no AWS)
     results = []
     try:
-        async with get_cffi_session(proxy, timeout=15) as session:
+        async with get_cffi_session(proxy, timeout=10) as session:
             url = f"https://www.google.com/search?q={query}&num={amount}&hl=en&gl=us{tbs_param}"
             resp = await session.get(url, headers=headers)
             status = getattr(resp, 'status_code', getattr(resp, 'status', None))
@@ -142,7 +142,7 @@ async def brave(dork, amount, proxy=None):
     # 2. Fallback to free proxy pool (or primary if no AWS)
     results = []
     try:
-        async with get_cffi_session(proxy, timeout=15) as session:
+        async with get_cffi_session(proxy, timeout=10) as session:
             url = f"https://search.brave.com/search?q={query}&source=web{fresh_param}"
             resp = await session.get(url, headers=headers)
             status = getattr(resp, 'status_code', getattr(resp, 'status', None))
@@ -192,7 +192,7 @@ async def bing(dork, amount, proxy=None):
     # 2. Fallback to free proxy pool (or primary if no AWS)
     results = []
     try:
-        async with get_cffi_session(proxy, timeout=15) as session:
+        async with get_cffi_session(proxy, timeout=10) as session:
             url = f"https://www.bing.com/search?q={query}&count={amount}{after_param}"
             resp = await session.get(url, headers=headers)
             status = getattr(resp, 'status_code', getattr(resp, 'status', None))
@@ -239,7 +239,7 @@ async def yandex(dork, amount, proxy=None):
     # 2. Fallback to free proxy pool (or primary if no AWS)
     results = []
     try:
-        async with get_cffi_session(proxy, timeout=15) as session:
+        async with get_cffi_session(proxy, timeout=10) as session:
             url = f"https://yandex.com/search/xml?query={query}&results={amount}"
             resp = await session.get(url, headers=headers)
             status = getattr(resp, 'status_code', getattr(resp, 'status', None))
@@ -257,7 +257,7 @@ async def publicwww(dork, amount, proxy=None):
     results = []
     headers = {'User-Agent': get_random_ua()}
     try:
-        async with get_cffi_session(proxy, timeout=15) as session:
+        async with get_cffi_session(proxy, timeout=10) as session:
             query = urllib.parse.quote_plus(dork)
             url = f"https://publicwww.com/websites/{query}/"
             resp = await session.get(url, headers=headers)
